@@ -1,0 +1,305 @@
+#### stub for manually updating the database ####
+import sqlite3
+db_path = "data/HockeyStat.db"
+
+def describe_db_tables():
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = cursor.fetchall()
+    t = [table[0] for table in tables]
+    print("Tables in the database:" , t)
+    for table_name in t:
+        print(f"\nSchema for table '{table_name}':")
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns = cursor.fetchall()
+        for column in columns:
+            print(column)
+    conn.close()
+    return
+
+def update_player_active(game_id, player_id, active):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE PlayerGameStats
+                   SET active=?
+                   WHERE game_id=? AND player_id=?
+                   """,(active,game_id,player_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+
+def add_team(team_id, club, season, team, location, coach):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   INSERT INTO Teams (team_id, club, season, team, location, coach)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   """,(team_id, club, season, team, location, coach))
+
+    print(f"Added team {team} with ID {team_id}")
+    conn.commit()
+    conn.close()
+
+def add_player(team_id, jersey_num, name, position):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   INSERT INTO Players (team_id, jersey_num, name, position)
+                   VALUES (?, ?, ?, ?)
+                   """,(team_id, jersey_num, name, position))
+
+    print(f"Added player {name} with ID {jersey_num}")
+    conn.commit()
+    conn.close()
+
+def print_table_contents(table_name, game_id=None):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    if game_id is None:
+        cursor.execute(f"SELECT * FROM {table_name}")
+    else:
+        cursor.execute(f"SELECT * FROM {table_name} WHERE game_id = {game_id}")
+    rows = cursor.fetchall()
+    for row in rows:
+        print(row)
+    conn.close()
+
+def add_game(game_id, date, home_team_id, home_score, away_team_id, away_score, league_play, game_type):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   INSERT INTO Games (game_id, date, home_team_id, home_score, away_team_id, away_score, league_play, game_type)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   """,(game_id, date, home_team_id, home_score, away_team_id, away_score, league_play, game_type))
+
+    print(f"Added game with ID {game_id} on {date}")
+    
+    for player_id in range(1, 14):
+        cursor.execute("""
+            INSERT INTO PlayerGameStats (game_id, player_id, goals, assists, penalty_min, active)
+            VALUES (?, ?, 0, 0, 0, 1)
+        """, (game_id, player_id))
+    
+    for player_id in [4,9]:  # assuming player IDs 4 and 9 are goalies  
+        cursor.execute("""
+            INSERT INTO GoalieGameStats (game_id, player_id, shots_faced, saves, goals_allowed, active)
+            VALUES (?, ?, 0, 0, 0, 1)
+        """, (game_id, player_id))
+    
+    conn.commit()
+    conn.close()
+
+def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed, active, result):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE GoalieGameStats
+        SET shots_faced = ?, saves = ?, goals_allowed = ?, active=?, result=?
+        WHERE game_id = ? AND player_id = ?
+    """, (shots_faced, saves, goals_allowed, active, result, game_id, player_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+
+def update_player_stats(game_id, player_id, goals, assists, penalty_min, active):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE PlayerGameStats
+                   SET goals=?, assists=?, penalty_min=?, active=?
+                   WHERE game_id=? AND player_id=?
+                   """,(goals,assists,penalty_min,active,game_id,player_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+
+def update_game(game_id, home_score, away_score):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE Games
+                   SET home_score=?, away_score=?
+                   WHERE game_id=?
+                   """,(home_score,away_score,game_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+#update_game(27, 10, 7)
+
+#describe_db_tables()
+#add_team(14,'Sno-King Jr Thunderbirds','2025','Trefethen Jr Thunderbirds','Sno-King Renton',None)
+
+#add_player(1, 42, 'Charlie', 'D')
+#add_player(18, 5, 'Nickolai', 'F')
+
+#print_table_contents("Games")
+#print_table_contents("Teams")
+#print_table_contents("Players")
+#print_table_contents("GoalieGameStats", 24)
+#print_table_contents("PlayerGameStats", 31)
+
+#add_game(19, '2026-01-31', 1, 8, 8, 7, 0, 1)
+#add_game(20, '2026-02-01', 5, 0, 1, 13, 0, 1)
+#add_game(21, '2026-02-07', 2, 1, 1, 5, 1, 1)
+
+#update_goalie_stats(19, 4, 29, 22, 7, 1, "W")
+#update_player_stats(19, 4, 0, 0, 0, 0)
+#update_goalie_stats(19, 9, 0, 0, 0, 0, None)
+#update_goalie_stats(20, 9, 17, 17, 0, 1, "W")
+#update_player_active(20, 9, False)
+#update_goalie_stats(20, 4, 0, 0, 0, 0, None)
+#update_goalie_stats(21, 9, 28, 27, 1, 1, "W")
+#update_player_active(21, 9, False)
+#update_goalie_stats(21, 4, 0, 0, 0, 0, None)
+
+
+#update_player_stats(21, 5, 2, 0, 0, 1)
+#update_player_stats(21, 2, 1, 1, 0, 1)
+#update_player_stats(21, 12, 0, 1, 0, 1)
+#update_player_stats(21, 4, 1, 0, 0, 1)
+#update_player_stats(21, 7, 1, 0, 0, 1)
+#update_player_stats(21, 13, 0, 1, 0, 1)
+
+#add_game(22, '2026-02-10', 9, 10, 1, 2, 0, 0)
+
+#update_goalie_stats(22, 4, 23, 13, 10, 1, "L")
+#update_player_active(22, 4, False)
+#update_goalie_stats(22, 9, 0, 0, 0, 0, None)
+
+#update_player_active(22, 1, False)
+#update_player_active(22, 2, False)
+#update_player_active(22, 8, False)
+
+#update_player_stats(22, 5, 1, 0, 0, 1)
+#update_player_stats(22, 9, 1, 0, 0, 1)
+#update_player_stats(22, 3, 0, 0, 2, 1)
+
+#update_goalie_stats(24, 9, 27, 25, 2, 1, "W")
+
+#add_game(25, '2026-03-06', 1, 9, ?, 4, 1, 4)
+
+
+
+def add_column(tbl, col):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} INTEGER DEFAULT 1")
+    
+    print(f"Added column {col} to table {tbl}")
+    conn.commit()
+    conn.close()
+#add_column("Games", "game_type")
+
+def drop_column(tbl, col):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute(f"ALTER TABLE {tbl} DROP COLUMN {col}")
+    
+    conn.commit()
+    conn.close()
+#drop_column("Games", "league_play")
+
+def update_game_type(game_id, game_type):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE Games
+                   SET game_type=?
+                   WHERE game_id=?
+                   """,(game_type,game_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+#update_game_type(25,3)
+
+def update_jersey():
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE Players
+        SET jersey_num = 0
+        WHERE team_id = 18 
+    """)
+
+    if cursor.rowcount >= 10 and cursor.rowcount < 18:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+#update_jersey()
+
+
+def delete_non_players(game_id):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM PlayerGameStats
+        WHERE game_id = ? AND player_id IN (16, 24, 25)
+    """, (game_id,))
+
+    if cursor.rowcount == 3:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 3.")
+    
+    conn.commit()
+    conn.close()
+
+#delete_non_players(31)
+#print_table_contents("PlayerGameStats", 31)
+
