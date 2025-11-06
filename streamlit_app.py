@@ -8,8 +8,7 @@ import streamlit as st
 
 # Page config
 st.set_page_config(page_title="HockeyStat", page_icon="🏒")
-st.title("🏒 Warriors")
-
+st.title("🏒 Warrior Stats")
 
 @st.cache_data
 def load_dfs_from_database(season: int = 2025, db_path: str = "data/HockeyStat.db") -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -103,19 +102,21 @@ def load_dfs_from_database(season: int = 2025, db_path: str = "data/HockeyStat.d
 # Load data (safe: function returns empty dataframes if DB or tables are missing)
 df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database()
 
+### make this a session state variable?
+selected_team_name = "10UBlack Warriors"
 
 ### --- Streamlit UI scaffold ---
-tab1, tab2 = st.tabs(["Games", "Player Stats"])
+tab1, tab2 = st.tabs(["Team", "Players"])
 
 with tab1:
-    st.header("Games")
+    st.header(f"{selected_team_name} Overview")
 
     if df_teams.empty:
         st.info("No teams found for the selected season (or DB not found). Use Admin to add teams.")
     else:
         team_map = df_teams.set_index("team_id")["team"].to_dict()
         team_options = df_teams["team"].tolist()
-        selected_team_name = st.selectbox("Select team", options=team_options, index=0)
+        #selected_team_name = st.selectbox("Select team", options=team_options, index=7, disabled=True)
         selected_team_id = int(df_teams[df_teams["team"] == selected_team_name].iloc[0]["team_id"])
 
         # Games involving this team
@@ -155,21 +156,44 @@ with tab1:
                 L = (team_games["result_for_team"] == "L").sum()
                 T = (team_games["result_for_team"] == "T").sum()
 
-                st.markdown(f"**Summary — W/L/T:** {W}/{L}/{T} — **PF/PA/SD:** {PF}/{PA}/{PF-PA}")
+                mcol1, mcol2, mcol3 = st.columns(3)
+                mcol1.metric("Wins", int(W))
+                mcol2.metric("Losses", int(L))
+                mcol3.metric("Ties", int(T))
 
-                # Show games table
-                st.dataframe(team_games[["date", "home_team_id", "home_score", "away_team_id", "away_score", "result_for_team"]].rename(columns={"result_for_team": "Result"}))
+                mcol4, mcol5, mcol6 = st.columns(3)
+                mcol4.metric("PF", int(PF))
+                mcol5.metric("PA", int(PA))
+                sd_val = int(PF - PA)
+                mcol6.metric("SD", sd_val)
+
+                # Prepare display table: map team ids to names and format date as date-only
+                display = team_games.copy()
+                if "date" in display.columns:
+                    try:
+                        display["date"] = pd.to_datetime(display["date"], errors="coerce")
+                        # show most recent first for the table
+                        display = display.sort_values("date", ascending=False)
+                        display["date"] = display["date"].dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
+                # map ids to names where possible
+                display["home_team"] = display["home_team_id"].map(team_map).fillna(display["home_team_id"])
+                display["visiting_team"] = display["away_team_id"].map(team_map).fillna(display["away_team_id"])
+
+                cols = ["date", "home_team", "home_score", "visiting_team", "away_score", "result_for_team"]
+                st.dataframe(display[cols].rename(columns={"result_for_team": "Result"}))
 
 with tab2:
-    st.header("Player Stats")
 
     if df_teams.empty or df_rosters.empty:
         st.info("No roster data available.")
     else:
         # default team is first from tab1 selection if present
         team_names = df_teams["team"].tolist()
-        selected_team_name = st.selectbox("Team (for player list)", options=team_names, index=0)
-        selected_team_id = int(df_teams[df_teams["team"] == selected_team_name].iloc[0]["team_id"])
+#        selected_team_name = st.selectbox("Team (for player list)", options=team_names, index=7, disabled=True)
+        selected_team_id = int(df_teams[df_teams["team"] == selected_team_name].iloc[-1]["team_id"])
 
         team_players = df_rosters[df_rosters["team_id"] == selected_team_id]
         if team_players.empty:
@@ -180,20 +204,93 @@ with tab2:
             selected_player_id = int(team_players[team_players["name"] == selected_player_name].iloc[0]["player_id"])
 
             # Player season totals from df_players
+            st.subheader(f"{selected_player_name} - Season Totals")
             p_stats = df_players[df_players["player_id"] == selected_player_id]
             if p_stats.empty:
                 st.info("No player game stats available for this player.")
             else:
-                totals = {
-                    "Games": p_stats["game_id"].nunique(),
-                    "Goals": int(p_stats["goals"].sum()),
-                    "Assists": int(p_stats["assists"].sum()),
-                    "Points": int(p_stats.get("points", pd.Series(dtype=int)).sum()) if "points" in p_stats.columns else int(p_stats["goals"].sum() + p_stats["assists"].sum()),
-                }
-                st.write(totals)
+                # filter out games where the player was not active (if column exists)
+                def _active_mask(s: pd.Series) -> pd.Series:
+                    # return a boolean mask where truthy/1/true values are considered active
+                    if s.dtype == bool:
+                        return s.fillna(False)
+                    # try numeric
+                    num = pd.to_numeric(s, errors="coerce")
+                    if not num.isna().all():
+                        return num.fillna(0).astype(int) != 0
+                    # fallback to string matching
+                    return s.astype(str).str.lower().isin(["1", "true", "t", "yes", "y"])
 
-                # Last 5 games
-                recent = p_stats.merge(df_games, on="game_id", how="left").sort_values("date", ascending=False).head(5)
-                if not recent.empty:
-                    st.subheader("Last 5 games")
-                    st.dataframe(recent[["date", "goals", "assists", "points"]])
+                if "active" in p_stats.columns:
+                    active_mask = _active_mask(p_stats["active"])
+                    p_stats_active = p_stats[active_mask].copy()
+                else:
+                    p_stats_active = p_stats.copy()
+
+                if p_stats_active.empty:
+                    st.info("Player has no active games this season.")
+                else:
+                    games_count = int(p_stats_active["game_id"].nunique())
+                    goals_total = int(p_stats_active["goals"].sum())
+                    assists_total = int(p_stats_active["assists"].sum())
+                    points_total = int(p_stats_active.get("points", pd.Series(dtype=int)).sum()) if "points" in p_stats_active.columns else int(goals_total + assists_total)
+                    # penalty minutes (penalty_min column)
+                    penalty_total = int(pd.to_numeric(p_stats_active.get("penalty_min", pd.Series(0)), errors="coerce").fillna(0).sum())
+                    hat_tricks = p_stats_active[p_stats_active["goals"] >= 3].shape[0]
+                    hat_trick_label = f"{hat_tricks} HatTricks" if hat_tricks > 0 else None
+                    play_makers = p_stats_active[p_stats_active["assists"] >= 3].shape[0]
+                    play_maker_label = f"{play_makers} PlayMakers" if play_makers > 1 else None
+
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("Games", games_count)
+                    c2.metric("Goals", goals_total, delta=hat_trick_label)
+                    c3.metric("Assists", assists_total, delta=play_maker_label)
+                    c4.metric("Points", points_total)
+                    c5.metric("PIM", penalty_total)
+
+                    # per-game averages (safe formatting)
+                    st.subheader(f"{selected_player_name} - Game Averages")
+                    ga_goals = round(goals_total / games_count, 2) if games_count > 0 else 0.0
+                    ga_assists = round(assists_total / games_count, 2) if games_count > 0 else 0.0
+                    ga_points = round(points_total / games_count, 2) if games_count > 0 else 0.0
+                    ga_pim = round(penalty_total / games_count, 2) if games_count > 0 else 0.0
+                    c11, c12, c13, c14, c15 = st.columns(5)
+                    c12.metric("Goals/G", ga_goals)
+                    c13.metric("Ast/G", ga_assists)
+                    c14.metric("Pt/G", ga_points)
+                    c15.metric("PIM/G", ga_pim)
+
+            # If the selected player appears in goalie stats, show aggregated goalie metrics
+            g_stats = df_goalies[df_goalies["player_id"] == selected_player_id]
+            if not g_stats.empty:
+                # insert a horizontal rule to separate skater and goalie sections
+                st.markdown("---")
+
+                if "active" in g_stats.columns:
+                    g_active = g_stats[_active_mask(g_stats["active"])].copy()
+                else:
+                    g_active = g_stats.copy()
+
+                if not g_active.empty:
+                    gp = int(g_active["game_id"].nunique())
+                    shots = int(g_active["shots_faced"].sum()) if "shots_faced" in g_active.columns else 0
+                    saves = int(g_active["saves"].sum()) if "saves" in g_active.columns else 0
+                    ga = int(g_active["goals_allowed"].sum()) if "goals_allowed" in g_active.columns else 0
+                    save_pct = round(float(saves) / shots, 3) if shots > 0 else None
+                    # compute W/L from result column (case-insensitive)
+                    if "result" in g_active.columns:
+                        res = g_active["result"].astype(str).str.upper()
+                        wins = int((res == "W").sum())
+                        losses = int((res == "L").sum())
+                    else:
+                        wins = 0
+                        losses = 0
+
+                    st.subheader("Goalie Season Stats")
+                    gc1, gc2, gc3, gc4, gc5 = st.columns(5)
+                    gc1.metric("W", wins)
+                    #gc6, = st.columns(1)
+                    gc2.metric("L", losses)
+                    gc3.metric("Shots On", shots)
+                    gc4.metric("Saves", saves)
+                    gc5.metric("Save %", f"{save_pct*100:.1f}%" if save_pct is not None else "N/A")
