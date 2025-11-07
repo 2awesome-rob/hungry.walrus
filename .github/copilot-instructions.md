@@ -34,8 +34,6 @@
                 away_team_id INTEGER,
                 home_score INTEGER,
                 away_score INTEGER,
-                result TEXT CHECK (result IN ('W', 'L', 'T')),
-                point_diff INTEGER,
                 overtime BOOLEAN DEFAULT FALSE,
                 shootout BOOLEAN DEFAULT FALSE,
                 FOREIGN KEY (home_team_id) REFERENCES Team(team_id),
@@ -48,7 +46,7 @@
                 goals INTEGER DEFAULT 0,
                 assists INTEGER DEFAULT 0,
                 penalty_min INTEGER DEFAULT 0,
-		        active BOOL DEFAULT TRUE,
+		          active BOOL DEFAULT TRUE,
                 PRIMARY KEY (game_id, player_id),
                 FOREIGN KEY (game_id) REFERENCES Game(game_id),
                 FOREIGN KEY (player_id) REFERENCES Player(player_id)
@@ -62,7 +60,7 @@
                 saves INTEGER DEFAULT 0,
                 goals_allowed INTEGER DEFAULT 0,
                 result TEXT CHECK (result IN ('W', 'L', '-')),
-		        active BOOL DEFAULT TRUE,
+		          active BOOL DEFAULT TRUE,
                 PRIMARY KEY (game_id, player_id),
                 FOREIGN KEY (game_id) REFERENCES Game(game_id),
                 FOREIGN KEY (player_id) REFERENCES Player(player_id)
