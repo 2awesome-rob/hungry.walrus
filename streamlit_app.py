@@ -184,6 +184,7 @@ with tab1:
 
                 cols = ["date", "home_team", "home_score", "visiting_team", "away_score", "result_for_team"]
                 st.dataframe(display[cols].rename(columns={"result_for_team": "Result"}))
+                st.markdown("---")
 
 with tab2:
     def _active_mask(s: pd.Series) -> pd.Series:
@@ -205,7 +206,7 @@ with tab2:
         if team_players.empty:
             st.info("No players found for this team.")
         else:
-            player_options = team_players["name"].tolist()
+            player_options = sorted(team_players["name"].tolist())
             selected_player_name = st.selectbox("Select player", options=player_options)
             selected_player_id = int(team_players[team_players["name"] == selected_player_name].iloc[0]["player_id"])
 
