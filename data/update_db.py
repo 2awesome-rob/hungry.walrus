@@ -38,9 +38,11 @@ def print_table_contents(table_name):
     conn.close()
 
 
+
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
-print_table_contents("GoalieGameStats")
-
+#print_table_contents("GoalieGameStats")
+#print_table_contents("PlayerGameStats")
+print_table_contents("Teams")
 
