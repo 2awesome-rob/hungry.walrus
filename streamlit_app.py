@@ -150,8 +150,8 @@ def aggregate_goalie_stats(df_goalies: pd.DataFrame, df_games: pd.DataFrame, df_
     df["save_pct"] = np.where(df["shots_faced"] > 0, df["saves"] / df["shots_faced"], np.nan)
     return df.sort_values("wins", ascending=False)
 
-def summarize_goalie_stats(df: pd.DataFrame) -> dict:
-    df = df.copy()
+def summarize_goalie_stats(df_goalies: pd.DataFrame) -> dict:
+    df = df_goalies.copy()
     df = df[active_mask(df["active"])] if "active" in df.columns else df
     if df.empty:
         return {}
@@ -182,6 +182,16 @@ def display_goalie_metrics(stats: dict):
     gcol3.metric("Shots On", stats["Shots"])
     gcol4.metric("Saves", stats["Saves"])
     gcol5.metric("Save %", f"{stats['SavePct']*100:.1f}%" if stats["SavePct"] is not None else "N/A")
+
+def display_goalie_game_log(df_log: pd.DataFrame, df_games: pd.DataFrame):
+    st.badge("Game Log", color="red")
+    df = df_log[df_log["active"]==True]
+    df = df.merge(df_games, on="game_id", how="left", suffixes=("", "_game")).sort_values("date", ascending=False)
+    cols = ['date', 'result', 'shots_faced', 'saves', 'goals_allowed']
+    st.dataframe(df[cols].rename(columns={
+            "date": "Date", "result": "W/L", "shots_faced": "SOG", 
+            "saves": "Saves", "goals_allowed": "Goals"
+        }), hide_index = True)
 
 def aggregate_player_stats(df_players: pd.DataFrame, df_games: pd.DataFrame, df_rosters: pd.DataFrame) -> pd.DataFrame:
     df = df_players.merge(df_games[["game_id"]], on="game_id")
@@ -235,6 +245,16 @@ def display_player_metrics(stats: dict, position: str):
     pcol9.metric("PPG", stats["PPG"])
     pcol10.metric("PIM/G", stats["PIMPG"])
 
+def display_player_game_log(df_log: pd.DataFrame, df_games: pd.DataFrame):
+    st.badge("Game Log", color="red")
+    df = df_log[df_log["active"]==True]
+    df = df.merge(df_games, on="game_id", how="left", suffixes=("", "_game")).sort_values("date", ascending=False)
+    cols = ['date', 'goals', 'assists', 'points', 'penalty_min']
+    st.dataframe(df[cols].rename(columns={
+            "date": "Date", "goals": "Goals", "assists": "Assists", 
+            "Points": "points", "penalty_min": "PIM"
+        }), hide_index = True)
+    
 def get_edit_games_df(df: pd.DataFrame, team_map: dict, next_game_id: int) -> pd.DataFrame:
     df_edit_games = df.copy(deep=True)
     df_edit_games["home_team"] = df_edit_games["home_team_id"].map(team_map).fillna(df_edit_games["home_team_id"])
@@ -405,6 +425,7 @@ else:
                     stat_dict = summarize_goalie_stats(stats_df)
                     display_goalie_metrics(stat_dict)
                     st.markdown("---")
+                    display_goalie_game_log(stats_df, df_games)
 
                 stats_df = df_players[df_players["player_id"] == selected_player_id]
                 if stats_df.empty:
@@ -412,6 +433,8 @@ else:
                 else:
                     stat_dict = summarize_player_stats(stats_df)
                     display_player_metrics(stat_dict, selected_pos)
+                    st.markdown("---")
+                    display_player_game_log(stats_df, df_games)
 
     with tab3:
         st.header("Admin Panel")
