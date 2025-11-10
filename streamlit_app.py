@@ -177,7 +177,7 @@ def display_goalie_metrics(stats: dict):
         st.info("No active goalie stats available.")
         return
     gcol1, gcol2, gcol3, gcol4, gcol5 = st.columns(5)
-    gcol1.metric("W", stats["W"], delta=stats["Shutouts"])
+    gcol1.metric("W", stats["W"], delta=(f"{stats['Shutouts']} Shutouts" if stats["Shutouts"] else None))
     gcol2.metric("L", stats["L"])
     gcol3.metric("Shots On", stats["Shots"])
     gcol4.metric("Saves", stats["Saves"])
@@ -396,7 +396,7 @@ else:
 
                 selected_jersey = int(team_players[team_players["name"] == selected_player_name].iloc[0]["jersey_num"])
                 selected_pos = str(team_players[team_players["name"] == selected_player_name].iloc[0]["position"])
-                st.subheader(f"# {selected_jersey}   {selected_player_name} ({selected_pos})- Season Stats", divider="red")
+                st.subheader(f"# {selected_jersey}   {selected_player_name}  ({selected_pos})", divider="red")
 
                 #st.metric("Position", selected_pos)
                 stats_df = df_goalies[df_goalies["player_id"] == selected_player_id]
