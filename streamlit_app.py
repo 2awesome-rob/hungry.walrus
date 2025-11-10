@@ -515,7 +515,6 @@ else:
                         ### helper function to reload dependent dataframes? -- TODO
                         st.success("Team changes saved. (Functionality to write back to DB is not yet implemented.)")
 
-st.write(<a href ="https://www.themhl.org/metropolitanhockeyleague/Standings"> MHL Standings<\a>)
-
+st.link_button(label="MHL", url="https://www.themhl.org/metropolitanhockeyleague/Standings")
 
 
