@@ -252,7 +252,7 @@ def display_player_game_log(df_log: pd.DataFrame, df_games: pd.DataFrame):
     cols = ['date', 'goals', 'assists', 'points', 'penalty_min']
     st.dataframe(df[cols].rename(columns={
             "date": "Date", "goals": "Goals", "assists": "Assists", 
-            "Points": "points", "penalty_min": "PIM"
+            "points": "Points", "penalty_min": "PIM"
         }), hide_index = True)
     
 def get_edit_games_df(df: pd.DataFrame, team_map: dict, next_game_id: int) -> pd.DataFrame:

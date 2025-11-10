@@ -39,10 +39,32 @@ def print_table_contents(table_name):
 
 
 
+
+def update_player_stats(game_id, player_id, goals, assists, penalty_min):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE PlayerGameStats
+                   SET goals=?, assists=?, penalty_min=?
+                   WHERE game_id=? AND player_id=?
+                   """,(goals,assists,penalty_min,game_id,player_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+
+#update_player_stats(6, 11, 1, 1, 0)
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
 #print_table_contents("GoalieGameStats")
-#print_table_contents("PlayerGameStats")
-print_table_contents("Teams")
+print_table_contents("PlayerGameStats")
+#print_table_contents("Teams")
 
