@@ -25,11 +25,11 @@ def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed):
     conn.commit()
     conn.close()
 
-def print_table_contents(table_name):
+def print_table_contents(table_name, game_id):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {table_name}")
+    cursor.execute(f"SELECT * FROM {table_name} WHERE game_id = {game_id}")
     rows = cursor.fetchall()
 
     for row in rows:
@@ -60,11 +60,15 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
     conn.commit()
     conn.close()
 
-#update_player_stats(6, 11, 1, 1, 0)
+#update_player_stats(6, 9, 3, 1, 1)
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
-#print_table_contents("GoalieGameStats")
-print_table_contents("PlayerGameStats")
+#print_table_contents("GoalieGameStats", 6)
+#print_table_contents("PlayerGameStats", 6)
 #print_table_contents("Teams")
 
+print(int(1))
+print(int(0))
+
+print(0==0 or int(0))
