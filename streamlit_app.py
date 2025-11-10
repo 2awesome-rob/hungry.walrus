@@ -267,38 +267,35 @@ def get_edit_games_df(df: pd.DataFrame, team_map: dict, next_game_id: int) -> pd
     edit_games_df = pd.concat([edit_games_df, next_game_df], ignore_index=True)
     return edit_games_df
     
-def get_edit_roster_df(df: pd.DataFrame, df_rosters: pd.DataFrame, selected_game: int) -> pd.DataFrame:
+def get_edit_game_roster_df(df: pd.DataFrame, df_rosters: pd.DataFrame, selected_game: int) -> pd.DataFrame:
     selected_df = df.copy(deep=True)
     selected_df = selected_df[selected_df["game_id"] == selected_game]
     selected_df = selected_df.merge(df_rosters[['player_id', 'name']], on='player_id', how='left')
     return selected_df
 
 def write_games_to_db(edit_games_df: pd.DataFrame, 
-                      df_players: pd.DataFrame, 
-                      df_goalies: pd.DataFrame, 
+                      df_rosters: pd.DataFrame, 
                       teams: dict, conn: sqlite3.Connection):
     
-    def _initialize_player_stats(team_id):
-        players = df_players[df_players["team_id"] == team_id]
+    def _initialize_stats(team_id, game_id):
+        players = df_rosters[df_rosters["team_id"] == team_id]
         for _, player in players.iterrows():
             cursor.execute(
-                "INSERT INTO PlayerStats (game_id, player_id, goals, assists, penalty_min, active) VALUES (?, ?, 0, 0, 0, TRUE)",
+                "INSERT INTO PlayerGameStats (game_id, player_id, goals, assists, penalty_min, active) VALUES (?, ?, 0, 0, 0, TRUE)",
                 (game_id, player["player_id"])
             )
-
-    def _initialize_goalie_stats(team_id):
-        goalies = df_goalies[df_goalies["team_id"] == team_id]
+        goalies = players[players["position"] == "G"]
         for _, goalie in goalies.iterrows():
             cursor.execute(
-                "INSERT INTO GoalieStats (game_id, goalie_id, saves, goals_allowed, shots_faced, active) VALUES (?, ?, 0, 0, 0, FALSE)",
-                (game_id, goalie["goalie_id"])
+                "INSERT INTO GoalieGameStats (game_id, player_id, saves, goals_allowed, shots_faced, active) VALUES (?, ?, 0, 0, 0, FALSE)",
+                (game_id, goalie["player_id"])
             )
 
     def _validate_game_row(row: pd.Series, teams: dict) -> bool:
         try:
             pd.to_datetime(row["date"])
-            int(row["home_score"]) or row["home_score"] == 0
-            int(row["away_score"]) or row["away_score"] == 0
+#            row["home_score"] == 0 or int(row["home_score"])
+#            row["away_score"] == 0 or int(row["away_score"])
             return row["away_team"] in teams.values() and row["home_team"] in teams.values()
         except Exception as e:
             st.warning(f"Validation failed: {e}")
@@ -310,72 +307,135 @@ def write_games_to_db(edit_games_df: pd.DataFrame,
         for col, new_val in changes.items():
             df.at[row_idx, col] = new_val
     if df.empty:
-        st.info("🟩 No Changes to Commit")
+        st.toast("🟩 No Changes to Commit")
         return
 
     else:                    
         cursor = conn.cursor()
         for _, row in df.iterrows():
             if _validate_game_row(row, teams):
-                game_id = row["game_id"].dt.strftime("%Y-%m-%d")
-                try:
-                    row["home_team_id"] = [k for k, v in teams.items() if v == row["home_team"]][0]
-                    row["away_team_id"] = [k for k, v in teams.items() if v == row["away_team"]][0]
-                    row["date"] = row["date"].dt.strftime("%Y-%m-%d")
-                    update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score"]
-                    values = [row[col] for col in update_fields]
+                game_id = row["game_id"]
+                row["date"] = row["date"].strftime("%Y-%m-%d")
+                row["home_team_id"] = [k for k, v in teams.items() if v == row["home_team"]][0]
+                row["away_team_id"] = [k for k, v in teams.items() if v == row["away_team"]][0]
+                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score"]
+                values = [row[col] for col in update_fields]
+
+                cursor.execute("SELECT COUNT(*) FROM Games WHERE game_id = ?", (game_id,))
+                exists = cursor.fetchone()[0] > 0
+                if exists:
                     set_clause = ", ".join([f"{col} = ?" for col in update_fields])
                     values.append(game_id)
                     cursor.execute(f"UPDATE Games SET {set_clause} WHERE game_id = ?", values)
-                    st.success(f"Updated {game_id}")
-                except Exception as e:
-                    st.warning(f"Update failed, trying insert: {e}")
+                    st.success(f"Updated Game {game_id}")
+                else:
                     insert_clauseA = ", ".join(update_fields)
                     insert_clauseB = ", ".join(["?" for _ in update_fields])
                     cursor.execute(f"INSERT INTO Games ({insert_clauseA}) VALUES ({insert_clauseB})", values)
                     for team in [row["home_team_id"], row["away_team_id"]]:
-                        _initialize_player_stats(team)
-                        _initialize_goalie_stats(team)
+                        _initialize_stats(team, game_id)
                     st.success(f"Added Game {game_id}")
-                    
         conn.commit()
         conn.close()
-        st.success("✅ Database Update Successful!")
+        st.toast("✅ Database Update Successful!")
 
-
-def write_player_stats_to_db(df: pd.DataFrame, conn: sqlite3.Connection):
-    def _validate_player_stats(df: pd.DataFrame) -> bool:
+def write_stats_to_db(edit_player_stat_df: pd.DataFrame, edit_goalie_stat_df: pd.DataFrame, conn: sqlite3.Connection):
+    def _validate_player_stats(ds: pd.Series) -> bool:
         required = ["goals", "assists", "penalty_min", "active"]
-        return all(col in df.columns for col in required)
+        return all(i in ds.index for i in required)
+
+    def _validate_goalie_stats(ds: pd.Series) -> bool:
+        required = ["shots_faced", "saves", "goals_allowed", "result", "active"]
+        return all(i in ds.index for i in required)
+
+    edits = st.session_state.get("player_stats_editor", {}).get("edited_rows", {})
+    player_df = edit_player_stat_df.loc[list(edits.keys())].copy()
+    for row_idx, changes in edits.items():
+        for col, new_val in changes.items():
+            player_df.at[row_idx, col] = new_val
+
+    edits = st.session_state.get("goalie_stats_editor", {}).get("edited_rows", {})
+    goalie_df = edit_goalie_stat_df.loc[list(edits.keys())].copy()
+    for row_idx, changes in edits.items():
+        for col, new_val in changes.items():
+            goalie_df.at[row_idx, col] = new_val
+
+    if player_df.empty and goalie_df.empty:
+        st.toast("🟩 No Changes to Commit")
+        return
 
     cursor = conn.cursor()
-    for _, row in df.iterrows():
+    for _, row in player_df.iterrows():
         if _validate_player_stats(row):
             cursor.execute("""
                 UPDATE PlayerGameStats SET goals=?, assists=?, penalty_min=?, active=?
                 WHERE player_id=? AND game_id=?
             """, (row["goals"], row["assists"], row["penalty_min"], int(row["active"]), row["player_id"], row["game_id"]))
-    conn.commit()
-    conn.close()
 
-def write_goalie_stats_to_db(df: pd.DataFrame, conn: sqlite3.Connection):
-    def _validate_goalie_stats(df: pd.DataFrame) -> bool:
-        try:
-            required = ["shots_faced", "saves", "goals_allowed", "result", "active"]
-            return all(col in df.columns for col in required)
-        except Exception as e:
-            st.warning(f"Validation failed: {e}")
-            return False
-
-    cursor = conn.cursor()
-    for _, row in df.iterrows():
+    for _, row in goalie_df.iterrows():
         if _validate_goalie_stats(row):
             cursor.execute("""
                 UPDATE GoalieGameStats SET shots_faced=?, saves=?, goals_allowed=?, result=?, active=?
                 WHERE player_id=? AND game_id=?
             """, (row["shots_faced"], row["saves"], row["goals_allowed"], row["result"], int(row["active"]), row["player_id"], row["game_id"]))
+
     conn.commit()
     conn.close()
+    st.toast("✅ Stat changes saved")
+
+def write_teams_to_db(edit_team_df: pd.DataFrame, conn: sqlite3.Connection):
+    def _validate_team(ds: pd.Series) -> bool:
+        required = ["club", "team", "season"]
+        return all(i in ds.index for i in required)
+
+    edits = st.session_state.get("team_data_editor", {}).get("edited_rows", {})
+    teams_df = edit_team_df.loc[list(edits.keys())].copy()
+    for row_idx, changes in edits.items():
+        for col, new_val in changes.items():
+            teams_df.at[row_idx, col] = new_val
+
+    if teams_df.empty:
+        st.toast("🟩 No Changes to Commit")
+        return
+
+    cursor = conn.cursor()
+    for _, row in teams_df.iterrows():
+        if _validate_team(row):
+            cursor.execute("""
+                UPDATE Teams SET club=?, team=?, season=?
+                WHERE team_id=?
+            """, (row["club"], row["team"], row["seaon"], row["team_id"]))
+
+    conn.commit()
+    conn.close()
+    st.toast("✅ Team changes saved")
+
+def write_roster_to_db(edit_roster_df: pd.DataFrame, conn: sqlite3.Connection):
+    def _validate_team(ds: pd.Series) -> bool:
+        required = ["jersey_num", "name", "position"]
+        return all(i in ds.index for i in required)
+
+    edits = st.session_state.get("player_data_editor", {}).get("edited_rows", {})
+    roster_df = edit_roster_df.loc[list(edits.keys())].copy()
+    for row_idx, changes in edits.items():
+        for col, new_val in changes.items():
+            roster_df.at[row_idx, col] = new_val
+
+    if roster_df.empty:
+        st.toast("🟩 No Changes to Commit")
+        return
+
+    cursor = conn.cursor()
+    for _, row in roster_df.iterrows():
+        if _validate_team(row):
+            cursor.execute("""
+                UPDATE Players SET jersey_num=?, name=?, position=?
+                WHERE player_id=?
+            """, (row["jersey_num"], row["name"], row["position"], row["player_id"]))
+
+    conn.commit()
+    conn.close()
+    st.toast("✅ Team changes saved")
 
 
 ### UI Header
@@ -509,70 +569,86 @@ else:
                                    "home_team": st.column_config.SelectboxColumn("Home Team", options=list(team_map.values())),
                                    "away_team": st.column_config.SelectboxColumn("Away Team", options=list(team_map.values()))
                                })
+                
                 st.button("Save Game Changes", key="save_game_stats_button")
                 if st.session_state.get("save_game_stats_button", False):
-                    write_games_to_db(edit_games_df, df_players,
-                                      df_goalies, team_map,
+                    st.cache_data.clear()
+                    write_games_to_db(edit_games_df, df_rosters, team_map,
                                       sqlite3.connect("data/HockeyStat.db"))
+                    #df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database()
+
                 st.write("")
                 st.markdown("---")
                 st.write("")
                 selected_game = st.selectbox("Edit Game", edit_games_df["game_id"].tolist(), index=None)
                 if selected_game:
-                    selected_players_game_df = get_edit_roster_df(df_players, df_rosters, selected_game)
+                    selected_players_game_df = get_edit_game_roster_df(df_players, df_rosters, selected_game)
                     cols = ["name", "goals", "assists", "penalty_min", "active"]
-                    ### cosider making player name read-only? -- TODO
+                    selected_players_game_df.sort_values("name", inplace=True)
                     st.data_editor(selected_players_game_df[cols],
                                    height="stretch",
                                    use_container_width=True,
+                                   hide_index=True,
                                    num_rows="fixed",
                                    key="player_stats_editor",
                                    column_config={
                                         "active": st.column_config.CheckboxColumn("Active"),
+                                        "name": st.column_config.TextColumn("Name", disabled=True)
                                         })
-                    selected_goalies_game_df = get_edit_roster_df(df_goalies, df_rosters, selected_game)
+                    selected_goalies_game_df = get_edit_game_roster_df(df_goalies, df_rosters, selected_game)
                     cols = ["name", "shots_faced", "saves", "goals_allowed", "result", "active"]
-                    ### cosider making player name dropdown to add a new goalie from existing players? -- TODO
+                    selected_goalies_game_df.sort_values("name", inplace=True)
                     st.data_editor(selected_goalies_game_df[cols],
                                    height="stretch",
                                    use_container_width=True,
+                                   hide_index=True,
                                    num_rows="dynamic",
                                    key="goalie_stats_editor",
                                    column_config={
                                         "active": st.column_config.CheckboxColumn("Active"),
+                                        "name": st.column_config.TextColumn("Goalie", disabled=True),
+                                        "result": st.column_config.SelectboxColumn("Result", options=[None, "W", "L", "-"]) 
+                                        #"name": st.column_config.SelectboxColumn("Goalie", options=df_rosters["name"].tolist())
                                         })
-                    ### ensure changes are written back to the DB? -- TODO
-                    ### ensure changes are complient with data types and constraints? -- TODO
-                    st.button("Save Game Changes", key="save_player_stats_button")
+                    st.button("Save Stat Changes", key="save_player_stats_button")
                     if st.session_state.get("save_player_stats_button", False):
-                        ### helper function to write back changes to DB? -- TODO
-                        ### helper function to reload dependent dataframes? -- TODO
-                        st.success("Player and Goalie stats changes saved. (Functionality to write back to DB is not yet implemented.)")
-                
+                        st.cache_data.clear()
+                        write_stats_to_db(selected_players_game_df,
+                                          selected_goalies_game_df,
+                                          sqlite3.connect("data/HockeyStat.db")
+                                          )
+                        #df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database()
+
+
             with tab42:
                 edit_teams_df = df_teams.copy(deep=True)
-                edit_players_df = df_rosters.copy(deep=True)
+                edit_roster_df = df_rosters.copy(deep=True)
+
                 st.data_editor(edit_teams_df[["club", "team", "season"]], height=300, use_container_width=True, num_rows="dynamic", key="team_data_editor")
                 st.button("Save Team Changes", key="save_team_button")
                 if st.session_state.get("save_team_button", False):
-                    ### ensure changes are complient with data types and constraints? -- TODO
-                    ### helper function to write back changes to DB? -- TODO
-                    ### helper function to reload dependent dataframes? -- TODO
-                    st.success("Team changes saved. (Functionality to write back to DB is not yet implemented.)")
-
+                    st.cache_data.clear()
+                    ### TODO add support for adding / teams
+                    write_teams_to_db(edit_teams_df, sqlite3.connect("data/HockeyStat.db"))
+                
                 selected_team = st.selectbox("Edit Team Roster", edit_teams_df['team'], index=None)
-            
                 if selected_team:
                     team_id = int(edit_teams_df[edit_teams_df["team"] == selected_team].iloc[0]["team_id"])
-                    edit_players_df = edit_players_df[edit_players_df["team_id"] == team_id]
-                    ### consider making position a dropdown column? -- TODO
-                    st.data_editor(edit_players_df[["jersey_num", "name", "position"]], height=400, use_container_width=True, num_rows="dynamic", key="player_data_editor")
+                    edit_roster_df = edit_roster_df[edit_roster_df["team_id"] == team_id]
+                    st.data_editor(edit_roster_df[["jersey_num", "name", "position"]],
+                                    height=400, 
+                                    use_container_width=True, 
+                                    num_rows="dynamic", 
+                                    key="player_data_editor",
+                                    column_config={
+                                        "position": st.column_config.SelectboxColumn("Position", options=["G", "F", "D"])
+                                        })
                     st.button("Save Team Changes", key="save_roster_button")
                     if st.session_state.get("save_roster_button", False):
-                        ### ensure changes are complient with data types and constraints? -- TODO
-                        ### helper function to write back changes to DB? -- TODO
-                        ### helper function to reload dependent dataframes? -- TODO
-                        st.success("Team changes saved. (Functionality to write back to DB is not yet implemented.)")
+                        st.cache_data.clear()
+                        ### TODO add support for adding / deleting players
+                        write_roster_to_db(edit_roster_df, sqlite3.connect("data/HockeyStat.db"))
+
 
 
 

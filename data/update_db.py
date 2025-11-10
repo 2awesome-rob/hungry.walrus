@@ -25,16 +25,32 @@ def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed):
     conn.commit()
     conn.close()
 
-def print_table_contents(table_name, game_id):
+def print_table_contents(table_name, game_id=None):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    if game_id is None:
+        cursor.execute(f"SELECT * FROM {table_name}")
+    else:
+        cursor.execute(f"SELECT * FROM {table_name} WHERE game_id = {game_id}")
+    rows = cursor.fetchall()
+    for row in rows:
+        print(row)
+    conn.close()
+
+def delete_game(game_id):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {table_name} WHERE game_id = {game_id}")
-    rows = cursor.fetchall()
+    cursor.execute(f"DELETE FROM Games WHERE game_id = {game_id}")
 
-    for row in rows:
-        print(row)
-
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
     conn.close()
 
 
@@ -64,11 +80,14 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
-#print_table_contents("GoalieGameStats", 6)
-#print_table_contents("PlayerGameStats", 6)
+#print_table_contents("GoalieGameStats", 7)
+#print_table_contents("PlayerGameStats", 7)
 #print_table_contents("Teams")
+#delete_game(7)
 
-print(int(1))
-print(int(0))
 
-print(0==0 or int(0))
+print_table_contents("Games")
+#print_table_contents("Players")
+
+
+
