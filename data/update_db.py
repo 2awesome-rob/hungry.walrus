@@ -54,8 +54,6 @@ def delete_game(game_id):
     conn.close()
 
 
-
-
 def update_player_stats(game_id, player_id, goals, assists, penalty_min):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -76,7 +74,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
     conn.commit()
     conn.close()
 
-#update_player_stats(6, 9, 3, 1, 1)
+update_player_stats(7, 3, 2, 0, 0)
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
@@ -86,8 +84,31 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
 #delete_game(7)
 
 
-print_table_contents("Games")
+#print_table_contents("Games")
 #print_table_contents("Players")
 
 
+def update_player_active(game_id, player_id, active):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE PlayerGameStats
+                   SET active=?
+                   WHERE game_id=? AND player_id=?
+                   """,(active,game_id,player_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+
+#update_player_active(7, 7, True)
+
+#update_player_active(7, 3, True)
 
