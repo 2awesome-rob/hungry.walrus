@@ -470,7 +470,7 @@ st.title("🏒 HockeyStat Dashboard", help="Hockey Team and Player Statistics Tr
 col00, col01, col02 = st.columns(3)
 
 with col00:
-    selected_season = st.selectbox("Selected Season", options=[2025, 2026, 2027], index=0, disabled=False)
+    selected_season = st.selectbox("Selected Season", options=[2025, 2026, 2027], index=0, disabled=True)
 
 # Load data - TODO: Add season selection option 
 df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database(int(selected_season))
@@ -484,7 +484,7 @@ else:
     player_map = df_rosters.set_index("player_id")["name"].to_dict()
     team_options = sorted(df_teams["team"].tolist())
     with col01:
-        selected_team_name = st.selectbox("Selected Team", options=team_options, index=7, disabled=False)
+        selected_team_name = st.selectbox("Selected Team", options=team_options, index=7, disabled=True)
         if selected_team_name not in team_options:
             selected_team_name = team_options[0]
             st.toast(f"Default Team not found; using '{selected_team_name}'")
