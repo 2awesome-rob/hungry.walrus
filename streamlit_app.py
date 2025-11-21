@@ -20,7 +20,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
     # helper empty dataframes
     df_teams = pd.DataFrame(columns=["team_id", "club", "team", "season", "location", "coach"])
     df_rosters = pd.DataFrame(columns=["player_id", "team_id", "jersey_num", "name", "position"])
-    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout"])
+    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
     df_players = pd.DataFrame(columns=["game_id", "player_id", "goals", "assists", "penalty_min", "active"])
     df_goalies = pd.DataFrame(columns=["game_id", "player_id", "shots_faced", "saves", "goals_allowed", "result", "active"])
 
@@ -39,7 +39,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
             df_rosters = pd.read_sql_query(q, conn, params=team_ids)
 
             # Load Games involving these teams
-            q = f"SELECT game_id, date, home_team_id, home_score, away_team_id, away_score FROM Games WHERE home_team_id IN ({t_placeholders}) OR away_team_id IN ({t_placeholders})"
+            q = f"SELECT game_id, date, home_team_id, home_score, away_team_id, away_score, league_play FROM Games WHERE home_team_id IN ({t_placeholders}) OR away_team_id IN ({t_placeholders})"
             df_games = pd.read_sql_query(q, conn, params=team_ids + team_ids)
             if not df_games.empty and "date" in df_games.columns:
                 df_games["date"] = pd.to_datetime(df_games["date"], errors="coerce")
@@ -88,7 +88,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
 
     return df_teams, df_rosters, df_games, df_players, df_goalies
 
-### Tab 1 helper functions
+### Tab 0 helper functions
 def summarize_team_games(df_games: pd.DataFrame, team_id: int) -> pd.DataFrame:
     """converts from home_score and away_score team_score and opp_score 
     deterimines win-loss-tie result 
@@ -129,9 +129,9 @@ def summarize_team_games(df_games: pd.DataFrame, team_id: int) -> pd.DataFrame:
         mcol6.metric("SD", int(PF - PA))
         return df.sort_values("date", ascending=False)
 
-def display_game_table(df: pd.DataFrame, team_map: dict):
+def display_game_table(df_games: pd.DataFrame, team_map: dict):
     """ displays formatted dataframe with named columns and team names vs team id"""
-    df = df.copy()
+    df = df_games.copy()
     df.loc[:, "home_team"] = df["home_team_id"].map(team_map).fillna(df["home_team_id"])
     df.loc[:, "visiting_team"] = df["away_team_id"].map(team_map).fillna(df["away_team_id"])
     df["date"] = pd.to_datetime(df["date"]).dt.date
@@ -170,8 +170,8 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             "assists": "Assists", "points": "Points", "penalty_min": "PIM"
             }).sort_values("Points", ascending=False), hide_index=True, height="stretch")        
 
-### Tab 2 helper functions
-def display_summary_stats(df: pd.DataFrame) -> dict:
+### Tab 1 helper functions
+def display_summary_stats(stats_df: pd.DataFrame) -> dict:
     """summarizes performance summary stats for players and goalies"""
     def _active_mask(s: pd.Series) -> pd.Series:
         if s.dtype == bool:
@@ -209,7 +209,7 @@ def display_summary_stats(df: pd.DataFrame) -> dict:
         pcol9.metric("PPG", stats["PPG"])
         pcol10.metric("PIM/G", stats["PIMPG"])
 
-    df = df.copy()
+    df = stats_df.copy()
     df = df[_active_mask(df["active"])] if "active" in df.columns else df
     if df.empty:
         return {}
@@ -241,9 +241,9 @@ def display_summary_stats(df: pd.DataFrame) -> dict:
             "PIMPG": round(pim / games, 2) if games else 0.0}
         _display_player_metrics(stats)
 
-def display_game_log(log_df: pd.DataFrame, df_games: pd.DataFrame):
+def display_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
     st.badge("Game Log", color="red")
-    df = log_df[log_df["active"]==True]
+    df = game_log_df[game_log_df["active"]==True].copy()
     df = df.merge(df_games, on="game_id", how="left", suffixes=("", "_game")).sort_values("date", ascending=False)
     df["date"] = pd.to_datetime(df["date"]).dt.date
     if 'shots_faced' in df.columns:
@@ -267,8 +267,8 @@ def check_admin_password(key="admin_password_input", expected="rip") -> bool:
         st.stop()
     return True
 
-def get_edit_games_df(df: pd.DataFrame, team_map: dict) -> pd.DataFrame:
-    edit_games_df = df.copy(deep=True)
+def get_edit_games_df(df_games: pd.DataFrame, team_map: dict) -> pd.DataFrame:
+    edit_games_df = df_games.copy(deep=True)
     edit_games_df["home_team"] = edit_games_df["home_team_id"].map(team_map).fillna(edit_games_df["home_team_id"])
     edit_games_df["away_team"] = edit_games_df["away_team_id"].map(team_map).fillna(edit_games_df["away_team_id"])
     return edit_games_df
@@ -285,12 +285,11 @@ def write_games_to_db(edited_games_df: pd.DataFrame,
                       df_rosters: pd.DataFrame, 
                       teams: dict, conn: sqlite3.Connection):
     cursor = conn.cursor()    
-
     def _validate_game_row(row: pd.Series, teams: dict) -> bool:
         try:
             pd.to_datetime(row["date"])
-            row["away_score"] in range(0, 100, 1) and row["home_score"] in range(0, 100, 1)
-            return row["away_team"] in teams.values() and row["home_team"] in teams.values()
+            vld = row["away_score"] in range(0, 100, 1) and row["home_score"] in range(0, 100, 1) and row["away_team"] in teams.values() and row["home_team"] in teams.values()
+            return vld
         except Exception as e:
             st.warning(f"Validation failed: {e}")
             return False
@@ -323,47 +322,41 @@ def write_games_to_db(edited_games_df: pd.DataFrame,
                 """, (game_id, goalie["player_id"]))
 
     edits = st.session_state.get("Games_data_editor", {}).get("edited_rows", {})
-    st.write(edits)
     df = edited_games_df.iloc[list(edits.keys())].copy()
     if df.empty:
         st.toast("🟩 No Changes to Commit")
         conn.close()
         return
-
     else:
-        st.write(df)
-        for _, row in df.iterrows():
+        for game_id, row in df.iterrows():
             if _validate_game_row(row, teams):
-                game_id = row.index
-                st.write(game_id)
-#                row["date"] = row["date"].strftime("%Y-%m-%d")
-#                row["home_team_id"] = [k for k, v in teams.items() if v == row["home_team"]][0]
-#                row["away_team_id"] = [k for k, v in teams.items() if v == row["away_team"]][0]
-#                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score"]
-#                values = [row[col] for col in update_fields]
-                
-#                cursor.execute("SELECT COUNT(*) FROM Games WHERE game_id = ?", (game_id,))
-#                exists = cursor.fetchone()[0] > 0
-#                if exists:
-#                    set_clause = ", ".join([f"{col} = ?" for col in update_fields])
-#                    values.append(game_id)
-#                    cursor.execute(f"UPDATE Games SET {set_clause} WHERE game_id = ?", values)
-#                    st.success(f"Updated Game {game_id}")
-#                else:
-#                    insert_clauseA = ", ".join(update_fields)
-#                    insert_clauseB = ", ".join(["?" for _ in update_fields])
-#                    cursor.execute(f"INSERT INTO Games ({insert_clauseA}) VALUES ({insert_clauseB})", values)
-#                    game_id = cursor.lastrowid
-#                    for team in [row["home_team_id"], row["away_team_id"]]:
-#                        _initialize_stats(team, game_id)
-#                    st.success(f"Added Game {game_id}")
-#            else: st.warning(f"Unable to Update Game {game_id}")
+                row["date"] = row["date"].strftime("%Y-%m-%d")
+                row["home_team_id"] = [k for k, v in teams.items() if v == row["home_team"]][0]
+                row["away_team_id"] = [k for k, v in teams.items() if v == row["away_team"]][0]
+                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score", "league_play"]
+                values = [row[col] for col in update_fields]
 
-        st.toast("✅ Database Updated")
+                cursor.execute("SELECT COUNT(*) FROM Games WHERE game_id = ?", (game_id,))
+                exists = cursor.fetchone()[0] > 0
+                if exists:
+                    set_clause = ", ".join([f"{col} = ?" for col in update_fields])
+                    values.append(game_id)
+                    cursor.execute(f"UPDATE Games SET {set_clause} WHERE game_id = ?", values)
+                    st.toast(f"Updated Game {game_id}")
+                else:
+                    insert_clauseA = ", ".join(update_fields)
+                    insert_clauseB = ", ".join(["?" for _ in update_fields])
+                    cursor.execute(f"INSERT INTO Games ({insert_clauseA}) VALUES ({insert_clauseB})", values)
+                    game_id = cursor.lastrowid
+                    for team in [row["home_team_id"], row["away_team_id"]]:
+                        _initialize_stats(team, game_id)
+                    st.toast(f"Added Game {game_id}")
+            else: st.warning(f"Unable to Update Game {game_id}")
     conn.commit()
     conn.close()
+    st.success("✅ Database Updated")
 
-def write_stats_to_db(player_edits_df: pd.DataFrame, goalie_edits_df: pd.DataFrame,
+def write_stats_to_db(player_edited_df: pd.DataFrame, goalie_edited_df: pd.DataFrame,
                       df_rosters: pd.DataFrame, game_id: int,
                       conn: sqlite3.Connection):
     
@@ -377,16 +370,13 @@ def write_stats_to_db(player_edits_df: pd.DataFrame, goalie_edits_df: pd.DataFra
 
     def _get_df(edits_df, roster, edits):
         df = edits_df.merge(roster, on = 'name')
-        for row_idx, changes in edits.items():
-            for col, new_val in changes.items():
-                df.iloc[row_idx].loc[col] = new_val
         return df.iloc[list(edits.keys())]
 
-    edits = st.session_state.get("player_stats_editor", {}).get("edited_rows", {})
-    update_players_df = _get_df(player_edits_df, df_rosters, edits)
+    edits = st.session_state.get("PlayerGameStats_editor", {}).get("edited_rows", {})
+    update_players_df = _get_df(player_edited_df, df_rosters, edits)
 
-    edits = st.session_state.get("goalie_stats_editor", {}).get("edited_rows", {})
-    update_goalies_df = _get_df(goalie_edits_df, df_rosters, edits)
+    edits = st.session_state.get("GoalieGameStats_editor", {}).get("edited_rows", {})
+    update_goalies_df = _get_df(goalie_edited_df, df_rosters, edits)
 
     if update_players_df.empty and update_goalies_df.empty:
         st.toast("🟩 No Changes to Commit")
@@ -402,15 +392,27 @@ def write_stats_to_db(player_edits_df: pd.DataFrame, goalie_edits_df: pd.DataFra
                     SET goals=?, assists=?, penalty_min=?, active=?
                     WHERE player_id=? AND game_id=?
                 """, (row["goals"], row["assists"], row["penalty_min"], int(row["active"]), row["player_id"], game_id))
+                st.toast(f"Stats updated for {row['name']}")
 
     if len(update_goalies_df) > 0:
         for _, row in update_goalies_df.iterrows():
             if _validate_goalie_stats(row):
-                cursor.execute("""
-                    UPDATE GoalieGameStats
-                    SET shots_faced=?, saves=?, goals_allowed=?, result=?, active=?
-                    WHERE player_id=? AND game_id=?
-                """, (row["shots_faced"], row["saves"], row["goals_allowed"], row["result"], int(row["active"]), row["player_id"], game_id))
+                cursor.execute("SELECT COUNT(*) FROM GoalieGameStats WHERE player_id = ? game_id = ?", (row["player_id"], game_id))
+                exists = cursor.fetchone()[0] > 0
+                if exists:
+                    cursor.execute("""
+                        UPDATE GoalieGameStats
+                        SET shots_faced=?, saves=?, goals_allowed=?, result=?, active=?
+                        WHERE player_id=? AND game_id=?
+                    """, (row["shots_faced"], row["saves"], row["goals_allowed"], row["result"], int(row["active"]), row["player_id"], game_id))
+                    st.toast(f"Stats updated for goalie {row['name']}")
+                else:
+                    cursor.execute("""
+                        INSERT INTO GoalieGameStats
+                        shots_faced, saves, goals_allowed, result, active, player_id, game_id        
+                        VALUES ?, ?, ?, ?, ?, ?, ?
+                    """, (row["shots_faced"], row["saves"], row["goals_allowed"], row["result"], int(row["active"]), row["player_id"], game_id))
+                    st.toast(f"Stats added for goalie {row['name']}")
 
     conn.commit()
     conn.close()
@@ -435,7 +437,6 @@ def write_to_db(edited_df: pd.DataFrame, tbl: str, conn: sqlite3.Connection):
 
     edits = st.session_state.get(f"{tbl}_data_editor", {}).get("edited_rows", {})
     df = edited_df.iloc[list(edits.keys())].copy()
-    
     update_fields, key_col = _validated(df, tbl)
     if not update_fields or df.empty:
         st.toast("🟩 No Changes to Commit")
@@ -443,8 +444,8 @@ def write_to_db(edited_df: pd.DataFrame, tbl: str, conn: sqlite3.Connection):
 
     cursor = conn.cursor()
 
-    for _, row in df.iterrows():
-            key = row[key_col]
+    for id, row in df.iterrows():
+            key = id
             values = [row[col] for col in update_fields]
             cursor.execute(f"SELECT COUNT(*) FROM {tbl} WHERE {key_col} = ?", (key,))
             exists = cursor.fetchone()[0] > 0
@@ -464,50 +465,58 @@ def write_to_db(edited_df: pd.DataFrame, tbl: str, conn: sqlite3.Connection):
     conn.close()
     st.toast(f"✅ {tbl} changes saved")
 
-
 ### UI Header
 st.title("🏒 HockeyStat Dashboard", help="Hockey Team and Player Statistics Tracker")
+col00, col01, col02 = st.columns(3)
+
+with col00:
+    selected_season = st.selectbox("Selected Season", options=[2025, 2026, 2027], index=0, disabled=False)
 
 # Load data - TODO: Add season selection option 
-df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database(2025)
+df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database(int(selected_season))
+
 if df_teams.empty or df_rosters.empty:
     st.info("No teams found for the selected season. Use Admin Panel to add teams and rosters.")
+    df_select_games = df_games
 
 else:
     team_map = df_teams.set_index("team_id")["team"].to_dict()
     player_map = df_rosters.set_index("player_id")["name"].to_dict()
-
-#   TODO: enable team selection option 
-    if "team_name" not in st.session_state:
-        team_options = sorted(df_teams["team"].tolist())
-#       selected_team_name = st.selectbox("Select team", options=team_options, index=1, disabled=True)
-        selected_team_name = "10U Warriors, Black"
+    team_options = sorted(df_teams["team"].tolist())
+    with col01:
+        selected_team_name = st.selectbox("Selected Team", options=team_options, index=7, disabled=False)
         if selected_team_name not in team_options:
             selected_team_name = team_options[0]
-            st.info(f"Default Team not found; using '{selected_team_name}'")
-        selected_team_id = int(df_teams[df_teams["team"] == selected_team_name].iloc[0]["team_id"])
-        st.session_state.team_name = selected_team_name
-        st.session_state.team_id = selected_team_id
+            st.toast(f"Default Team not found; using '{selected_team_name}'")
+    selected_team_id = int(df_teams[df_teams["team"] == selected_team_name].iloc[0]["team_id"])
+    st.session_state.team_name = selected_team_name
+    st.session_state.team_id = selected_team_id
 
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = 0
+    with col02:
+        l_p = st.pills("League Play", ["League", "Non-League"], selection_mode="multi", default=["League"])
+    if l_p == []:
+        df_select_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
+    elif l_p == ["League"]:
+        df_select_games = df_games[df_games['league_play']==1]
+    elif l_p == ["Non-League"]:
+        df_select_games = df_games[df_games['league_play']==0]
+    else:
+        df_select_games = df_games
+    selected_game_ids = df_select_games["game_id"].unique()
 
 ### --- Streamlit UI scaffold ---
-
-#tab1, tab2, tab3, tab4 = st.tabs(["Team", "Players", "About", "Admin"])
 tabs = st.tabs(["Team", "Players", "About", "Admin"])
-#active_tab = st.session_state.get("active_tab", 0)
-
+#if "active_tab" not in st.session_state:
+#    st.session_state.active_tab = 2
 
 with tabs[0]:
-    if tabs[0]: st.session_state.active_tab = 0
     if "team_name" in st.session_state:
         st.subheader(f"{st.session_state.team_name} Overview", divider="red")
 
-        if df_games.empty:
+        if df_select_games.empty:
             st.info("No games found for this season.")
         else:
-            team_games = summarize_team_games(df_games, st.session_state.team_id)
+            team_games = summarize_team_games(df_select_games, st.session_state.team_id)
             st.markdown("---")
             st.badge("Recent Games", color="red")
             display_game_table(team_games.head(10), team_map)  
@@ -520,7 +529,6 @@ with tabs[0]:
             display_season_total_stats(df_players, team_games, df_rosters, st.session_state.team_id)
 
 with tabs[1]:
-    if tabs[1]: st.session_state.active_tab = 1
     team_players = df_rosters[df_rosters["team_id"] == st.session_state.team_id]
     if team_players.empty or df_rosters.empty:
         st.info("No roster data available.")
@@ -534,35 +542,37 @@ with tabs[1]:
         
         st.subheader(f"# {selected_jersey}   {selected_player_name}  ({selected_pos})", divider="red")
 
-        stats_df = df_goalies[df_goalies["player_id"] == selected_player_id]
+        stats_df = df_goalies[
+            (df_goalies["player_id"] == selected_player_id) & 
+            (df_goalies["game_id"].isin(selected_game_ids))]
         if not stats_df.empty:
             display_summary_stats(stats_df)
             st.markdown("---")
-            display_game_log(stats_df, df_games)
+            display_game_log(stats_df, df_select_games)
             st.markdown("---")
 
-        stats_df = df_players[df_players["player_id"] == selected_player_id]
+        stats_df = df_players[
+            (df_players["player_id"] == selected_player_id) &
+            (df_players["game_id"].isin(selected_game_ids))]
         if stats_df.empty:
             st.info("No player game stats available for this player.")
         else:
             display_summary_stats(stats_df)
             st.markdown("---")
-            display_game_log(stats_df, df_games)
+            display_game_log(stats_df, df_select_games)
 
 with tabs[2]:
-    if tabs[2]: st.session_state.active_tab = 2
-
     st.write("League Standing and Schedule:")
     st.link_button(label="MetroHockeyLeague", url="https://www.themhl.org/metropolitanhockeyleague/Standings")
     
     st.markdown("---")
     st.write("Other Hockey Links:")
-    col31, col32, col33 = st.columns(3)
-    with col31:
+    col21, col22, col23 = st.columns(3)
+    with col21:
         st.link_button(label="Strategy", url="https://blueseatblogs.com/hockey-systems-strategy/")
-    with col32:
+    with col22:
         st.link_button(label="Drills and Practice", url="https://www.icehockeysystems.com/hockey-drills/drill-category/small-area-games")
-    with col33:
+    with col23:
         st.link_button(label="Playbook", url="https://www.jes-hockey.com/")
 
     st.markdown("---")        
@@ -574,19 +584,15 @@ with tabs[2]:
     st.write("")
     st.write("")
     st.write("Apache License Version 2.0, January 2004")    
-        
+
 with tabs[3]:
-    if tabs[3]: st.session_state.active_tab = 3
-
     st.header("Admin Panel")
-
     if check_admin_password():
+        tab31, tab32 = st.tabs(["Update Games", "Manage Teams"])
 
-        tab41, tab42 = st.tabs(["Update Games", "Manage Teams"])
-
-        with tab41:
+        with tab31:
             edit_games_df = get_edit_games_df(df_games, team_map)
-            cols = ["date", "away_score", "away_team", "home_team", "home_score"]
+            cols = ["date", "away_score", "away_team", "home_team", "home_score", "league_play"]
             edited_games_df = st.data_editor(edit_games_df[cols],
                            num_rows = "dynamic",
                            height=200,
@@ -595,14 +601,14 @@ with tabs[3]:
                            column_config={
                                "date" : st.column_config.DateColumn("Date"),
                                "home_team": st.column_config.SelectboxColumn("Home Team", options=list(team_map.values())),
-                               "away_team": st.column_config.SelectboxColumn("Away Team", options=list(team_map.values()))
+                               "away_team": st.column_config.SelectboxColumn("Away Team", options=list(team_map.values())),
+                               "league_play": st.column_config.CheckboxColumn("League")
                            })
             st.button("Save Game Changes", key="save_game_stats_button")
             if st.session_state.get("save_game_stats_button", False):
-                st.write(edited_games_df)
-#                write_games_to_db(edited_games_df, df_rosters, team_map,
-#                                  sqlite3.connect("data/HockeyStat.db"))
-#                st.cache_data.clear()
+                write_games_to_db(edited_games_df, df_rosters, team_map,
+                                  sqlite3.connect("data/HockeyStat.db"))
+                st.cache_data.clear()
 
             st.write("")
             st.markdown("---")
@@ -637,21 +643,19 @@ with tabs[3]:
                                     "active": st.column_config.CheckboxColumn("Active"),
                                     "name": st.column_config.TextColumn("Goalie", disabled=True),
                                     "result": st.column_config.SelectboxColumn("Result", options=[None, "W", "L", "-"]) 
-                                    #"name": st.column_config.SelectboxColumn("Goalie", options=df_rosters["name"].tolist())
                                     })
                 st.button("Save Stat Changes", key="save_player_stats_button")
                 if st.session_state.get("save_player_stats_button", False):
-                    st.cache_data.clear()
                     write_stats_to_db(player_stat_edits_df,
                                       goalie_stat_edits_df,
                                       df_rosters,
                                       selected_game,
                                       sqlite3.connect("data/HockeyStat.db"))
+                    st.cache_data.clear()
 
-
-        with tab42:
+        with tab32:
             edit_roster_df = df_rosters.copy(deep=True)
-            cols = ["team_id", "club", "team", "season"]
+            cols = ["club", "team", "season"]
             edit_teams_df = st.data_editor(df_teams[cols], height=300, num_rows="dynamic", key="Teams_data_editor")
             st.button("Save Team Changes", key="save_team_button")
             if st.session_state.get("save_team_button", False):

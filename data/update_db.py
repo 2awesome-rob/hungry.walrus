@@ -74,7 +74,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
     conn.commit()
     conn.close()
 
-update_player_stats(7, 3, 2, 0, 0)
+#update_player_stats(7, 3, 2, 0, 0)
 #update_goalie_stats(3, 9, 11, 10, 1)
 #update_goalie_stats(5, 9, 11, 9, 2)
 
@@ -112,3 +112,24 @@ def update_player_active(game_id, player_id, active):
 
 #update_player_active(7, 3, True)
 
+
+def add_column(tbl, col):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col}")
+    
+    conn.commit()
+    conn.close()
+
+#add_column("Games", "league_play")
+
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+cursor.execute(f"SELECT * FROM Games")
+columns = [desc[0] for desc in cursor.description]
+print(columns)
+#rows = cursor.fetchall()
+#for row in rows:
+#    print(row)
+conn.close()
