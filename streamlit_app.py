@@ -572,9 +572,12 @@ with tabs[1]:
 with tabs[2]:
     st.write("League Standing and Schedule:")
     col200, col201, col202 = st.columns(3)
-    st.link_button(label="Metro Hockey League", url="https://www.themhl.org/metropolitanhockeyleague/Standings")
-    st.link_button(label="Bremerton", url="https://bremertonicecenter.com/west-sound-hockey-club-wshc/")
-    st.link.button(label="History/Lore", url="https://en.wikipedia.org/wiki/West_Sound_Warriors")
+    with col200:
+        st.link_button(label="🏙️ Metro Hockey League", url="https://www.themhl.org/metropolitanhockeyleague/Standings")
+    with col201:
+        st.link_button(label="🌧️ Bremerton", url="https://bremertonicecenter.com/west-sound-hockey-club-wshc/")
+    with col202:
+        st.link_button(label="📜 History and Lore", url="https://en.wikipedia.org/wiki/West_Sound_Warriors")
 
     st.markdown("---")
 
