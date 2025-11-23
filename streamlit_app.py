@@ -571,16 +571,20 @@ with tabs[1]:
 
 with tabs[2]:
     st.write("League Standing and Schedule:")
+    col200, col201, col202 = st.columns(3)
     st.link_button(label="Metro Hockey League", url="https://www.themhl.org/metropolitanhockeyleague/Standings")
-    
+    st.link_button(label="Bremerton", url="https://bremertonicecenter.com/west-sound-hockey-club-wshc/")
+    st.link.button(label="History/Lore", url="https://en.wikipedia.org/wiki/West_Sound_Warriors")
+
     st.markdown("---")
+
     st.write("Other Hockey Links:")
-    col21, col22, col23 = st.columns(3)
-    with col21:
+    col210, col211, col212 = st.columns(3)
+    with col210:
         st.link_button(label="🏒 Strategy", url="https://blueseatblogs.com/hockey-systems-strategy/")
-    with col22:
+    with col211:
         st.link_button(label="🧩 Drills and Practice", url="https://www.icehockeysystems.com/hockey-drills/drill-category/small-area-games")
-    with col23:
+    with col212:
         st.link_button(label="📘 Playbook", url="https://www.jes-hockey.com/")
 
     st.markdown("---")        
