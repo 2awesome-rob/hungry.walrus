@@ -5,15 +5,15 @@ import sqlite3
 db_path = "data/HockeyStat.db"
 
 
-def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed):
+def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed, active, result):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     cursor.execute("""
         UPDATE GoalieGameStats
-        SET shots_faced = ?, saves = ?, goals_allowed = ?
+        SET shots_faced = ?, saves = ?, goals_allowed = ?, active=?, result=?
         WHERE game_id = ? AND player_id = ?
-    """, (shots_faced, saves, goals_allowed, game_id, player_id))
+    """, (shots_faced, saves, goals_allowed, active, result, game_id, player_id))
 
     if cursor.rowcount == 1:
         print("✅ Update successful")
@@ -76,16 +76,16 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
 
 #update_player_stats(7, 3, 2, 0, 0)
 #update_goalie_stats(3, 9, 11, 10, 1)
-#update_goalie_stats(5, 9, 11, 9, 2)
 
 #print_table_contents("GoalieGameStats", 7)
 #print_table_contents("PlayerGameStats", 7)
 #print_table_contents("Teams")
 #delete_game(7)
-
+#print_table_contents("GoalieGameStats", 8)
+print_table_contents("GoalieGameStats")
 
 #print_table_contents("Games")
-#print_table_contents("Players")
+print_table_contents("Players")
 
 
 def update_player_active(game_id, player_id, active):
@@ -124,12 +124,3 @@ def add_column(tbl, col):
 
 #add_column("Games", "league_play")
 
-conn = sqlite3.connect(db_path)
-cursor = conn.cursor()
-cursor.execute(f"SELECT * FROM Games")
-columns = [desc[0] for desc in cursor.description]
-print(columns)
-#rows = cursor.fetchall()
-#for row in rows:
-#    print(row)
-conn.close()
