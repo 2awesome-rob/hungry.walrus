@@ -148,13 +148,15 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
     df = df_players.merge(df_games[["game_id"]], on="game_id")
     df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
     df = df[df['team_id']==team]
+#    df = df[~df["name"].str.contains("Guest", na=False)]
 
     if "shots_faced" in df.columns:
         df["wins"] = df["result"].str.upper().eq("W").astype(int)
         df["losses"] = df["result"].str.upper().eq("L").astype(int)
         df = df.groupby("name", as_index=False).agg({
-            "wins": "sum", "losses": "sum", "shots_faced": "sum", "saves": "sum", "goals_allowed": "sum"
+            "active":"sum", "wins": "sum", "losses": "sum", "shots_faced": "sum", "saves": "sum", "goals_allowed": "sum"
             })
+        df = df[df['active']!=0]
         df["save_pct"] = np.where(df["shots_faced"] > 0, df["saves"] / df["shots_faced"], np.nan)
         st.dataframe(df.rename(columns={
             "name": "Goalie", "wins": "W", "losses": "L", "shots_faced": "SOG",
@@ -164,13 +166,14 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
         df = df.groupby("name", as_index=False).agg({
             "active": "sum", "goals": "sum", "assists": "sum", "points": "sum", "penalty_min": "sum"
         })
+        df = df[df['active']!=0]
         st.dataframe(df.rename(columns={
             "name": "Player", "active": "Games", "goals": "Goals",
             "assists": "Assists", "points": "Points", "penalty_min": "PIM"
             }).sort_values("Points", ascending=False), hide_index=True, height="stretch")        
 
 ### Tab 1 helper functions
-def display_summary_stats(stats_df: pd.DataFrame):
+def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
     """summarizes performance summary stats for players and goalies"""
     def _active_mask(s: pd.Series) -> pd.Series:
         if s.dtype == bool:
@@ -192,7 +195,7 @@ def display_summary_stats(stats_df: pd.DataFrame):
         gcol5.metric("Save %", f"{stats['SavePct']*100:.1f}%" if stats["SavePct"] is not None else "N/A")
     def _display_player_metrics(stats: dict):
         if not stats:
-            st.info("No active player stats available.")
+            st.info("No active skater stats available.")
             return
         st.badge("Offense Stats", color="red")
         pcol1, pcol2, pcol3, pcol4, pcol5 = st.columns(5)
@@ -220,7 +223,12 @@ def display_summary_stats(stats_df: pd.DataFrame):
         res = df.get("result", pd.Series(dtype=str)).astype(str).str.upper()
         wins = int((res == "W").sum())
         losses = int((res == "L").sum())
-        shutouts = int(df[(res == "W") & (df["goals_allowed"] == 0)].shape[0]) or 0
+        shutouts = 0
+        z_games = df.loc[(res == "W") & (df["goals_allowed"] == 0), "game_id"].unique()
+        for gid in z_games:
+            if full_df.groupby("game_id")["active"].sum().loc[gid] == 1:
+                shutouts += 1
+        #shutouts = int(df[(res == "W") & (df["goals_allowed"] == 0)].shape[0]) or 0
         stats = {"W": wins, "L": losses, "Shots": shots, "Saves": saves,
                  "SavePct": save_pct, "Shutouts": shutouts}
         _display_goalie_metrics(stats)
@@ -533,7 +541,7 @@ with tabs[0]:
             st.badge("Goalie Stats", color="red")
             display_season_total_stats(df_goalies, team_games, df_rosters, st.session_state.team_id)
                 
-            st.badge("Player Stats", color="red")
+            st.badge("Skater Stats", color="red")
             display_season_total_stats(df_players, team_games, df_rosters, st.session_state.team_id)
 
 with tabs[1]:
@@ -542,6 +550,7 @@ with tabs[1]:
         st.info("No roster data available.")
     else:
         player_options = sorted(team_players["name"].tolist())
+        player_options = [p for p in player_options if "Guest" not in p]
         selected_player_name = st.selectbox("Select player", options=player_options)
 
         selected_player_id = int(team_players[team_players["name"] == selected_player_name].iloc[0]["player_id"])
@@ -554,7 +563,7 @@ with tabs[1]:
             (df_goalies["player_id"] == selected_player_id) & 
             (df_goalies["game_id"].isin(selected_game_ids))]
         if not stats_df.empty:
-            display_summary_stats(stats_df)
+            display_summary_stats(stats_df, df_goalies)
             st.markdown("---")
             display_game_log(stats_df, df_select_games)
             st.markdown("---")
@@ -563,9 +572,9 @@ with tabs[1]:
             (df_players["player_id"] == selected_player_id) &
             (df_players["game_id"].isin(selected_game_ids))]
         if stats_df.empty:
-            st.info("No player game stats available for this player.")
+            st.info("No skater game stats available for this player.")
         else:
-            display_summary_stats(stats_df)
+            display_summary_stats(stats_df, df_players)
             st.markdown("---")
             display_game_log(stats_df, df_select_games)
 
