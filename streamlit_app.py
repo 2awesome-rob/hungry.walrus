@@ -535,7 +535,7 @@ with tabs[0]:
             team_games = summarize_team_games(df_select_games, st.session_state.team_id)
             st.markdown("---")
             st.badge("Recent Games", color="red")
-            display_game_table(team_games.head(10), team_map)  
+            display_game_table(team_games.head(15), team_map)  
             
             st.markdown("---")
             st.badge("Goalie Stats", color="red")
