@@ -82,10 +82,10 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min):
 #print_table_contents("Teams")
 #delete_game(7)
 #print_table_contents("GoalieGameStats", 8)
-print_table_contents("GoalieGameStats")
+#print_table_contents("GoalieGameStats")
 
 #print_table_contents("Games")
-print_table_contents("Players")
+#print_table_contents("Players")
 
 
 def update_player_active(game_id, player_id, active):
@@ -108,7 +108,7 @@ def update_player_active(game_id, player_id, active):
     conn.commit()
     conn.close()
 
-#update_player_active(7, 7, True)
+update_player_active(9, 9, False)
 
 #update_player_active(7, 3, True)
 

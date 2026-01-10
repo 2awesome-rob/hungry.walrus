@@ -84,7 +84,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
 
     return df_teams, df_rosters, df_games, df_players, df_goalies
 
-### Tab 0 helper functions
+### Team Tab helper functions
 def summarize_team_games(df_games: pd.DataFrame, team_id: int) -> pd.DataFrame:
     """converts from home_score and away_score team_score and opp_score 
     deterimines win-loss-tie result 
@@ -172,7 +172,7 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             "assists": "Assists", "points": "Points", "penalty_min": "PIM"
             }).sort_values("Points", ascending=False), hide_index=True, height="stretch")        
 
-### Tab 1 helper functions
+### Players Tab helper functions
 def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
     """summarizes performance summary stats for players and goalies"""
     def _active_mask(s: pd.Series) -> pd.Series:
@@ -266,7 +266,7 @@ def display_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
                 "points": "Points", "penalty_min": "PIM"
             }), hide_index = True)
 
-### Tab 3 helper functions
+### Admin Tab helper functions
 def check_admin_password(key="admin_password_input", expected="rip") -> bool:
     st.text_input("Admin password", type="password", key=key)
     if st.session_state.get(key, "") != expected:
@@ -523,7 +523,7 @@ else:
     selected_game_ids = df_select_games["game_id"].unique()
 
 ### --- Streamlit UI scaffold ---
-tabs = st.tabs(["Team", "Players", "About", "Admin"])
+tabs = st.tabs(["Team", "Players", "Plots", "About", "Admin"])
 
 with tabs[0]:
     if "team_name" in st.session_state:
@@ -578,7 +578,46 @@ with tabs[1]:
             st.markdown("---")
             display_game_log(stats_df, df_select_games)
 
+
+# --- Helper: compute 3‑game moving average for a single player
+
+def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame, df_rosters: pd.DataFrame, team: int) -> pd.DataFrame:
+    """ displays a df of season totals for each player on the team """
+    df = df_players.merge(df_games[["game_id"]], on="game_id")
+    df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
+
+
+
+def compute_moving_average(df):
+    df = df.sort_values("game_id")
+    df["points_avg3"] = (
+        df["points"].rolling(window=3, min_periods=1).mean()
+    )
+    return df
+
+# --- Helper: classify hot/not
+def classify_hot_not(df):
+    if len(df) < 4:
+        return None, 0  # not enough games
+
+    last3 = df["points_avg3"].iloc[-1]
+    prior_avg = df["points"].iloc[:-3].mean()
+
+    if last3 > prior_avg:
+        return "hot", prior_avg
+    else:
+        return "ice", prior_avg
+
+
+
 with tabs[2]:
+    st.subheader("Plots and Visualizations")
+    st.info("Plotting functionality coming soon!")
+    st.markdown("---")
+
+
+
+with tabs[3]:
     st.write("League Standing and Schedule:")
     col200, col201, col202 = st.columns(3)
     with col200:
@@ -607,7 +646,7 @@ with tabs[2]:
     st.empty()
     st.write("Apache License Version 2.0, January 2004")    
 
-with tabs[3]:
+with tabs[4]:
     st.header("Admin Panel")
     if check_admin_password():
         tab31, tab32 = st.tabs(["Update Games", "Manage Teams"])
