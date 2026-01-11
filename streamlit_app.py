@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
+import altair as alt
 
 ### Page config ###
 st.set_page_config(page_title="HockeyStat", page_icon="🏒")
@@ -145,6 +146,21 @@ def display_game_table(df_games: pd.DataFrame, team_map: dict):
 
 def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame, df_rosters: pd.DataFrame, team: int) -> pd.DataFrame:
     """ displays a df of season totals for each player on the team """
+    def _team_leaders(df: pd.DataFrame, pos: str):
+        if 'leader' not in st.session_state:
+            st.session_state.leader = {}
+        if pos == "G":
+            st.session_state.leader['goal_save_pct'] = df[df['save_pct'] == df['save_pct'].max()]["name"].values[0] if not df.empty else None  
+            st.session_state.leader['goal_w'] = df[df['wins'] == df['wins'].max()]["name"].values[0] if not df.empty else None  
+        else:
+            st.session_state.leader['top_points'] = df[df['points'] == df['points'].max()]["name"].values[0] if not df.empty else None
+            st.session_state.leader['top_goals'] = df[df['goals'] == df['goals'].max()]["name"].values[0] if not df.empty else None
+            st.session_state.leader['top_assists'] = df[df['assists'] == df['assists'].max()]["name"].values[0] if not df.empty else None
+            st.session_state.leader['most_points_per_game'] = df[df['points']/df['active'] == (df['points']/df['active']).max()]["name"].values[0] if not df.empty else None 
+            st.session_state.leader['most_goals_per_game'] = df[df['goals']/df['active'] == (df['goals']/df['active']).max()]["name"].values[0] if not df.empty else None 
+            st.session_state.leader['most_assists_per_game'] = df[df['assists']/df['active'] == (df['assists']/df['active']).max()]["name"].values[0] if not df.empty else None 
+            st.session_state.leader['most_assists_per_point'] = df[df['assists']/df['points'] == (df['assists']/df['points']).max()]["name"].values[0] if not df.empty else None
+    
     df = df_players.merge(df_games[["game_id"]], on="game_id")
     df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
     df = df[df['team_id']==team]
@@ -162,6 +178,8 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             "name": "Goalie", "wins": "W", "losses": "L", "shots_faced": "SOG",
             "saves": "Saves", "save_pct": "Save %", "goals_allowed": "Goals"
             }).sort_values("W", ascending=False), hide_index=True)
+        _team_leaders(df, "G")
+
     else:
         df = df.groupby("name", as_index=False).agg({
             "active": "sum", "goals": "sum", "assists": "sum", "points": "sum", "penalty_min": "sum"
@@ -170,7 +188,9 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
         st.dataframe(df.rename(columns={
             "name": "Player", "active": "Games", "goals": "Goals",
             "assists": "Assists", "points": "Points", "penalty_min": "PIM"
-            }).sort_values("Points", ascending=False), hide_index=True, height="stretch")        
+            }).sort_values("Points", ascending=False), hide_index=True, height="stretch")
+        _team_leaders(df, "S")
+
 
 ### Players Tab helper functions
 def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
@@ -197,7 +217,8 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         if not stats:
             st.info("No active skater stats available.")
             return
-        st.badge("Offense Stats", color="red")
+        st.badge("Skater Stats", color="red")
+
         pcol1, pcol2, pcol3, pcol4, pcol5 = st.columns(5)
         pcol1.metric("Games", stats["Games"])
         pcol2.metric("Goals", stats["Goals"], delta=f"{stats['HatTricks']} HatTricks" if stats["HatTricks"] else None)
@@ -206,15 +227,27 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         pcol5.metric("PIM", stats["PIM"])
         st.markdown("---")
         pcol6, pcol7, pcol8, pcol9, pcol10 = st.columns(5)
-        pcol7.metric("GPG", stats["GPG"])
-        pcol8.metric("APG", stats["APG"])
-        pcol9.metric("PPG", stats["PPG"])
-        pcol10.metric("PIM/G", stats["PIMPG"])
-
+        pcol6.metric("Per Game:", "")
+        pcol7.metric("Goals", stats["GPG"])
+        pcol8.metric("Assists", stats["APG"])
+        pcol9.metric("Points", stats["PPG"])
+        pcol10.metric("PIM", stats["PIMPG"])
+        st.markdown("---")
+        pcol11, pcol12, pcol13, pcol14, pcol15 = st.columns(5)
+        pcol11.metric("Other:", "")
+        if stats["APP"] is not None:
+            pcol14.metric("Assist/Point", stats["APP"])
+        if stats["GreatGame"]:
+            pcol15.metric(f"Great Game!", "🌟")
+        elif stats["Fire"] > 0.5:
+            pcol15.metric(f"Hot Streak", "🔥")
+        elif stats["Fire"] < -0.5:
+            pcol15.metric(f"Cool Streak", "🧊")
+            
     df = stats_df.copy()
     df = df[_active_mask(df["active"])] if "active" in df.columns else df
     if df.empty:
-        return {}
+        pass
 
     if "shots_faced" in df.columns:
         shots = int(df.get("shots_faced", 0).sum())
@@ -239,32 +272,53 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         assists = int(df["assists"].sum())
         points = int(df.get("points", df["goals"] + df["assists"]).sum())
         pim = int(pd.to_numeric(df.get("penalty_min", 0), errors="coerce").fillna(0).sum())
-
+        if games > 3:
+            last_two = df["points"][-2:].mean() - df["points"][:-2].mean()
+            if df["points"][-1:].mean() == 0:
+                last_two = min(0.0, last_two)
+            great_game = True if df["points"][-1:].mean() > df["points"].mean() + 1 else False
         hat_tricks = df[df["goals"] >= 3].shape[0]
         play_makers = df[df["assists"] >= 3].shape[0]
+        assistperpoint = round(assists / points, 2) if points > 0 else None
+        name = df["name"].iloc[0] if "name" in df.columns else "Player"
         stats = {"Games": games, "Goals": goals, "Assists": assists, "Points": points, "PIM": pim,
-            "HatTricks": hat_tricks, "PlayMakers": play_makers, "GPG": round(goals / games, 2) if games else 0.0,
-            "APG": round(assists / games, 2) if games else 0.0, "PPG": round(points / games, 2) if games else 0.0,
-            "PIMPG": round(pim / games, 2) if games else 0.0}
+            "HatTricks": hat_tricks, "PlayMakers": play_makers,
+            "GPG": round(goals / games, 2) if games else 0.0,
+            "APG": round(assists / games, 2) if games else 0.0,
+            "PPG": round(points / games, 2) if games else 0.0,
+            "PIMPG": round(pim / games, 2) if games else 0.0,
+            "Fire": last_two if games > 3 else 0.0,
+            "GreatGame": great_game if games > 3 else False,
+            "APP": assistperpoint}
         _display_player_metrics(stats)
 
 def display_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
-    st.badge("Game Log", color="red")
     df = game_log_df[game_log_df["active"]==True].copy()
     df = df.merge(df_games, on="game_id", how="left", suffixes=("", "_game")).sort_values("date", ascending=False)
     df["date"] = pd.to_datetime(df["date"]).dt.date
     if 'shots_faced' in df.columns:
         cols = ['date', 'result', 'shots_faced', 'saves', 'goals_allowed']
-        st.dataframe(df[cols].rename(columns={
-                "date": "Date", "result": "W/L", "shots_faced": "SOG", 
-                "saves": "Saves", "goals_allowed": "Goals"
+        st.dataframe(df[:3][cols].rename(columns={
+            "date": "Date", "result": "W/L", "shots_faced": "SOG", 
+            "saves": "Saves", "goals_allowed": "Goals"
             }), hide_index = True)
     else:
         cols = ['date', 'goals', 'assists', 'points', 'penalty_min']
-        st.dataframe(df[cols].rename(columns={
+        st.dataframe(df[:3][cols].rename(columns={
                 "date": "Date", "goals": "Goals", "assists": "Assists", 
                 "points": "Points", "penalty_min": "PIM"
             }), hide_index = True)
+
+def plot_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
+    #st.badge("Scoring History", color="red")
+    df = game_log_df[game_log_df["active"]==True].copy()
+    df = df.merge(df_games, on="game_id", how="left", suffixes=("", "_game")).sort_values("date", ascending=False)
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    if 'shots_faced' in df.columns:
+        df["Save%"] = np.where(df["shots_faced"] > 0, df["saves"] / df["shots_faced"], np.nan)  
+        st.line_chart(data=df, x="date", y="Save%", x_label="",color="#a54848", height=120)
+    else:
+        st.line_chart(data=df, x="date", y=["assists", "points"], x_label="", color=["#a54848", "#ff2b2b"], height=200)
 
 ### Admin Tab helper functions
 def check_admin_password(key="admin_password_input", expected="rip") -> bool:
@@ -492,6 +546,7 @@ with col00:
 
 df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database(int(selected_season))
 
+
 if df_teams.empty or df_rosters.empty:
     st.info("No teams found for the selected season. Use Admin Panel to add teams and rosters.")
     df_select_games = df_games
@@ -535,7 +590,7 @@ with tabs[0]:
             team_games = summarize_team_games(df_select_games, st.session_state.team_id)
             st.markdown("---")
             st.badge("Recent Games", color="red")
-            display_game_table(team_games.head(15), team_map)  
+            display_game_table(team_games.head(5), team_map)  
             
             st.markdown("---")
             st.badge("Goalie Stats", color="red")
@@ -566,6 +621,9 @@ with tabs[1]:
             display_summary_stats(stats_df, df_goalies)
             st.markdown("---")
             display_game_log(stats_df, df_select_games)
+            if len(stats_df) > 3:
+                #st.markdown("---")
+                plot_game_log(stats_df, df_select_games)
             st.markdown("---")
 
         stats_df = df_players[
@@ -577,43 +635,20 @@ with tabs[1]:
             display_summary_stats(stats_df, df_players)
             st.markdown("---")
             display_game_log(stats_df, df_select_games)
-
-
-# --- Helper: compute 3‑game moving average for a single player
-
-def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame, df_rosters: pd.DataFrame, team: int) -> pd.DataFrame:
-    """ displays a df of season totals for each player on the team """
-    df = df_players.merge(df_games[["game_id"]], on="game_id")
-    df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
-
-
-
-def compute_moving_average(df):
-    df = df.sort_values("game_id")
-    df["points_avg3"] = (
-        df["points"].rolling(window=3, min_periods=1).mean()
-    )
-    return df
-
-# --- Helper: classify hot/not
-def classify_hot_not(df):
-    if len(df) < 4:
-        return None, 0  # not enough games
-
-    last3 = df["points_avg3"].iloc[-1]
-    prior_avg = df["points"].iloc[:-3].mean()
-
-    if last3 > prior_avg:
-        return "hot", prior_avg
-    else:
-        return "ice", prior_avg
-
-
+            if len(stats_df) > 3:
+                #st.markdown("---")
+                plot_game_log(stats_df, df_select_games)
 
 with tabs[2]:
     st.subheader("Plots and Visualizations")
     st.info("Plotting functionality coming soon!")
     st.markdown("---")
+    ### Top Contributors
+    ### TODO: build treemap of total points/assists/goals by player
+    ### TODO: build heatmap of points by player against games
+
+    ### Sharing is Caring
+    ### TODO: build bar chart of assists to point ratio by player
 
 
 
