@@ -37,6 +37,8 @@ def print_table_contents(table_name, game_id=None):
         print(row)
     conn.close()
 
+print_table_contents("Games", 9)
+
 def delete_game(game_id):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -108,8 +110,7 @@ def update_player_active(game_id, player_id, active):
     conn.commit()
     conn.close()
 
-update_player_active(9, 9, False)
-
+#update_player_active(9, 9, False)
 #update_player_active(7, 3, True)
 
 
@@ -117,10 +118,42 @@ def add_column(tbl, col):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col}")
+    cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} INTEGER DEFAULT 1")
+    
+    print(f"Added column {col} to table {tbl}")
+    conn.commit()
+    conn.close()
+
+#add_column("Games", "game_type")
+
+def drop_column(tbl, col):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute(f"ALTER TABLE {tbl} DROP COLUMN {col}")
     
     conn.commit()
     conn.close()
 
-#add_column("Games", "league_play")
+#drop_column("Games", "league_play")
 
+def update_game_type(game_id, game_type):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   UPDATE Games
+                   SET game_type=?
+                   WHERE game_id=?
+                   """,(game_type,game_id))
+
+    if cursor.rowcount == 1:
+        print("✅ Update successful")
+    elif cursor.rowcount == 0:
+        print("🚫 No Record Found")
+    else:
+        print(f"Updated {cursor.rowcount} records, expected 1.")
+    
+    conn.commit()
+    conn.close()
+#update_game_type(9,0)

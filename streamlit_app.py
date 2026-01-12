@@ -22,7 +22,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
     # empty dataframes as fallback
     df_teams = pd.DataFrame(columns=["team_id", "club", "team", "season", "location", "coach"])
     df_rosters = pd.DataFrame(columns=["player_id", "team_id", "jersey_num", "name", "position"])
-    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
+    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play", "game_type"])
     df_players = pd.DataFrame(columns=["game_id", "player_id", "goals", "assists", "penalty_min", "active"])
     df_goalies = pd.DataFrame(columns=["game_id", "player_id", "shots_faced", "saves", "goals_allowed", "result", "active"])
 
@@ -158,12 +158,15 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             st.session_state.leader = {}
         if 'goalie_leader' not in st.session_state:
             st.session_state.goalie_leader = {}
+        if 'leader_count' not in st.session_state:
+            st.session_state.leader_count = 0
         if pos == "G":
             df =df[df['shots_faced'] >= 10]  # minimum shots on goal to qualify
             st.session_state.goalie_leader['save'] = df[df['save_pct'] == df['save_pct'].max()]["player_id"].values[0] if not df.empty else None  
             st.session_state.goalie_leader['wins'] = df[df['wins'] == df['wins'].max()]["player_id"].values[0] if not df.empty else None  
         else:
             df= df[df['points'] >= df['active'].max()/2]  # minimum points scored to qualify
+            st.session_state.leader_count = df.shape[0]
             st.session_state.leader["PPG"] = _top3(df, lambda d: d["points"] / d["active"])
             st.session_state.leader["GPG"] = _top3(df, lambda d: d["goals"] / d["active"])
             st.session_state.leader["APG"] = _top3(df, lambda d: d["assists"] / d["active"])
@@ -239,6 +242,7 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         gcol3.metric("Shots On", stats["Shots"])
         gcol4.metric("Saves", stats["Saves"])
         gcol5.metric("Save % "+ stats["SavePct"][1], f"{stats['SavePct'][0]*100:.1f}%" if stats["SavePct"][0] is not None else "N/A")
+
     def _display_player_metrics(stats: dict):
         if not stats:
             st.info("No active skater stats available.")
@@ -303,9 +307,13 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         play_makers = df[df["assists"] >= 3].shape[0]
         assistperpoint = round(assists / points, 2) if points > 0 else None
         p_id = df["player_id"].iloc[0] if "player_id" in df.columns else "Player"
-        leader_for = [(item[0], "🥇") for item in st.session_state.leader.items() if item[1][0] == p_id]
-        leader_for.extend([(item[0], "🥈") for item in st.session_state.leader.items() if item[1][1] == p_id])
-        leader_for.extend([(item[0], "🥉") for item in st.session_state.leader.items() if item[1][2] == p_id])
+        #TODO guard against missing leader state or less than 3 leaders
+        if st.session_state.leader_count > 0:
+            leader_for = [(item[0], "🥇") for item in st.session_state.leader.items() if item[1][0] == p_id]
+        if st.session_state.leader_count > 1:
+            leader_for.extend([(item[0], "🥈") for item in st.session_state.leader.items() if item[1][1] == p_id])
+        if st.session_state.leader_count > 2:
+            leader_for.extend([(item[0], "🥉") for item in st.session_state.leader.items() if item[1][2] == p_id])
         stats = {"Games": games,
                  "Goals": (goals, _get_badge("goals", leader_for)),
                  "Assists": (assists, _get_badge("assists", leader_for)),
@@ -348,6 +356,41 @@ def plot_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
         st.line_chart(data=df, x="date", y="Save%", x_label="",color="#a54848", height=120)
     else:
         st.line_chart(data=df, x="date", y=["assists", "points"], x_label="", color=["#a54848", "#ff2b2b"], height=200)
+
+### Plot Tab helper functions
+def plot_season_stats(df_players: pd.DataFrame, 
+                      df_games: pd.DataFrame,
+                      df_rosters: pd.DataFrame,
+                        team: int, stat: str) -> pd.DataFrame:
+    """ displays a plot of game totals for each player on the team """
+    if stat not in ["active", "goals", "assists", "points"]:
+        st.warning("Invalid stat for plotting.")
+        pass
+
+    df = df_players.merge(df_games[["game_id"]], on="game_id")
+    df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
+    df = df[df['team_id']==team]
+    df.drop(['team_id', 'player_id','penalty_min'], axis=1, inplace=True)
+    df = df[~df["name"].str.contains("Guest", na=False)]
+    df_wide = (df.set_index(["name", "game_id"])[stat].unstack("game_id")
+               )
+    # Optional: sort columns nicely
+    df_wide = df_wide.sort_index(axis=1, level=1)
+
+    df["total_"+stat] = df.groupby("name")[stat].transform("sum")
+    fig = px.treemap(df, path=['name'], values="total_"+stat,
+                     title=f"Total {stat.title()} by Player",
+                     color="total_"+stat, #hover_data=['iso_alpha'],
+                     color_continuous_scale='reds_r',
+                     labels=dict(color=f"{stat.title()}"),
+                     )
+    st.plotly_chart(fig)
+
+    fig = px.imshow(df_wide, title=f"Player {stat.title()} by Game",
+                    color_continuous_scale=[(0, "black"), (0.7, "#A54848"), (1, "white")],
+                    labels=dict(x="Game #", y="Player", color=f"{stat.title()}"))
+    fig.update_xaxes(showticklabels=False)
+    st.plotly_chart(fig)
 
 ### Admin Tab helper functions
 def check_admin_password(key="admin_password_input", expected="rip") -> bool:
@@ -438,7 +481,7 @@ def write_games_to_db(edited_games_df: pd.DataFrame,
         for _, row in df.iterrows():
             if _validate_game_row(row, teams):
                 row["date"] = row["date"].strftime("%Y-%m-%d")
-                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score", "league_play"]
+                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score", "game_type"]
                 values = [row[col] for col in update_fields]
                 insert_clauseA = ", ".join(update_fields)
                 insert_clauseB = ", ".join(["?" for _ in update_fields])
@@ -570,11 +613,13 @@ st.title("🏒 HockeyStat Dashboard", help="Hockey Team and Player Statistics Tr
 col00, col01, col02 = st.columns(3)
 
 with col00:
-    selected_season = st.selectbox("Selected Season", options=[2025, 2026, 2027], index=0, disabled=True)
+    selected_season = st.selectbox("Selected Season", 
+                                   options=[2025, 2026, 2027], 
+                                   index=0, 
+                                   disabled=True)
     st.session_state.season = selected_season
 
 df_teams, df_rosters, df_games, df_players, df_goalies = load_dfs_from_database(int(selected_season))
-
 
 if df_teams.empty or df_rosters.empty:
     st.info("No teams found for the selected season. Use Admin Panel to add teams and rosters.")
@@ -594,14 +639,22 @@ else:
     st.session_state.team_id = selected_team_id
 
     with col02:
-        l_p = st.pills("League Play", ["League", "Non-League"], selection_mode="multi", default=["League"])
+        l_p = st.pills("League Play", ["League", "Tournament", "Scrimage"], selection_mode="multi", default=["League"])
     st.session_state.league_play = l_p
     if l_p == []:
         df_select_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
     elif l_p == ["League"]:
-        df_select_games = df_games[df_games['league_play']==1]
-    elif l_p == ["Non-League"]:
-        df_select_games = df_games[df_games['league_play']==0]
+        df_select_games = df_games[df_games['game_type']==1]
+    elif l_p == ["League", "Scrimage"]:
+        df_select_games = df_games[df_games['game_type'].isin([0,1])]
+    elif l_p == ["League", "Tournament"]:
+        df_select_games = df_games[df_games['game_type'].isin([1,2])]
+    elif l_p == ["Scrimage"]:
+        df_select_games = df_games[df_games['game_type']==0]
+    elif l_p == ["Scrimage", "Tournament"]:    
+        df_select_games = df_games[df_games['game_type'].isin([0,2])]
+    elif l_p == ["Tournament"]:
+        df_select_games = df_games[df_games['game_type']==2]
     else:
         df_select_games = df_games
     selected_game_ids = df_select_games["game_id"].unique()
@@ -615,6 +668,7 @@ with tabs[0]:
 
         if df_select_games.empty:
             st.info("No games found for this season.")
+            team_games = pd.DataFrame()
         else:
             team_games = summarize_team_games(df_select_games, st.session_state.team_id)
             st.markdown("---")
@@ -668,57 +722,18 @@ with tabs[1]:
                 #st.markdown("---")
                 plot_game_log(stats_df, df_select_games)
 
-
-def plot_season_stats(df_players: pd.DataFrame, 
-                      df_games: pd.DataFrame,
-                      df_rosters: pd.DataFrame,
-                        team: int, stat: str) -> pd.DataFrame:
-    """ displays a plot of game totals for each player on the team """
-    if stat not in ["active", "goals", "assists", "points"]:
-        st.warning("Invalid stat for plotting.")
-        pass
-
-    df = df_players.merge(df_games[["game_id"]], on="game_id")
-    df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
-    df = df[df['team_id']==team]
-    df.drop(['team_id', 'player_id','penalty_min'], axis=1, inplace=True)
-    df = df[~df["name"].str.contains("Guest", na=False)]
-    df_wide = (df.set_index(["name", "game_id"])[stat].unstack("game_id")
-               )
-    # Optional: sort columns nicely
-    df_wide = df_wide.sort_index(axis=1, level=1)
-
-    df["total_"+stat] = df.groupby("name")[stat].transform("sum")
-    fig = px.treemap(df, path=['name'], values="total_"+stat,
-                     title=f"Total {stat.title()} by Player",
-                     color="total_"+stat, #hover_data=['iso_alpha'],
-                     color_continuous_scale='reds_r',
-                     labels=dict(color=f"{stat.title()}"),
-                     )
-    st.plotly_chart(fig)
-
-    fig = px.imshow(df_wide, title=f"Player {stat.title()} by Game",
-                    color_continuous_scale=[(0, "black"), (0.7, "#A54848"), (1, "white")],
-                    labels=dict(x="Game #", y="Player", color=f"{stat.title()}"))
-    fig.update_xaxes(showticklabels=False)
-    st.plotly_chart(fig)
-
-
-
-
 with tabs[2]:
-    stat = st.radio("Select Statistic", ["goals", "assists", "points"],
-                     index=0, label_visibility="collapsed",
-                     horizontal=True)
-    plot_season_stats(df_players, team_games, df_rosters, st.session_state.team_id, stat)
-    st.markdown("---")
-    ### Top Contributors
-    ### TODO: build treemap of total points/assists/goals by player
-
+    if df_players.empty or team_games.empty:
+        st.info("No stats available for plotting.")
+    else:
+        stat = st.radio("Select Statistic", ["goals", "assists", "points"],
+                         index=1, label_visibility="collapsed",
+                         horizontal=True)
+        plot_season_stats(df_players, team_games, df_rosters, st.session_state.team_id, stat)
+        st.markdown("---")
+   
     ### Sharing is Caring
     ### TODO: build bar chart of assists to point ratio by player
-
-
 
 with tabs[3]:
     st.write("League Standing and Schedule:")
@@ -756,7 +771,7 @@ with tabs[4]:
 
         with tab31:
             edit_games_df = get_edit_games_df(df_games, team_map)
-            cols = ["date", "away_score", "away_team", "home_team", "home_score", "league_play"]
+            cols = ["date", "away_score", "away_team", "home_team", "home_score", "game_type"]
             edited_games_df = st.data_editor(edit_games_df[cols],
                            num_rows = "dynamic",
                            height=200,
@@ -766,7 +781,7 @@ with tabs[4]:
                                "date" : st.column_config.DateColumn("Date"),
                                "home_team": st.column_config.SelectboxColumn("Home Team", options=list(team_map.values())),
                                "away_team": st.column_config.SelectboxColumn("Away Team", options=list(team_map.values())),
-                               "league_play": st.column_config.CheckboxColumn("League")
+                               #"league_play": st.column_config.CheckboxColumn("League")
                            })
             st.button("Save Game Changes", key="save_game_stats_button")
             if st.session_state.get("save_game_stats_button", False):
