@@ -38,7 +38,7 @@ def add_team(team_id, club, season, team, location, coach):
 #add_team(10,'Tri-City Jr Americans','2025','Tolar Jr Americans','Hapo Center',None)
 #add_team(11,'Tri-City Jr Americans','2025','Geris Jr Americans','Hapo Center',None)
 #add_team(12,'Tri-City Jr Americans','2025','Knighten Jr Americans','Hapo Center',None)
-#add_team(13,'Sno-King','2025','Sno-King','<location>',None)
+add_team(13,'Sno-King Jr Thunderbirds','2025','Cooper Jr Thunderbirds','Sno-King Renton',None)
 
 
 def print_table_contents(table_name, game_id=None):
@@ -89,7 +89,8 @@ def add_game(game_id, date, home_team_id, home_score, away_team_id, away_score, 
 
 #add_game(14, '2026-01-23', 10, 4, 1, 5, 0, 2)
 #add_game(15, '2026-01-23', 11, 6, 1, 2, 0, 2)
-add_game(16, '2026-01-24', 1, 6, 12, 3, 0, 2)
+#add_game(16, '2026-01-24', 1, 6, 12, 3, 0, 2)
+add_game(17, '2026-01-24', 13, 1, 1, 2, 0, 2)
 
 
 def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed, active, result):
@@ -135,19 +136,15 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 
 
-update_goalie_stats(16, 9, 37, 34, 3, 1, "W")
-update_player_stats(16, 9, 0, 0, 0, 0)
-update_goalie_stats(16, 4, 0, 0, 0, 0, None)
+update_goalie_stats(17, 9, 28, 27, 1, 1, "W")
+update_player_stats(17, 9, 0, 0, 0, 0)
+update_goalie_stats(17, 4, 0, 0, 0, 0, None)
 
-update_player_stats(16, 5, 2, 0, 0, 1)
-update_player_stats(16, 11, 0, 1, 0, 1)
-update_player_stats(16, 12, 1, 0, 0, 1)
+update_player_stats(17, 1, 1, 0, 0, 1)
+update_player_stats(17, 7, 1, 0, 0, 1)
+update_player_stats(17, 6, 0, 0, 1, 1)
 
-update_player_stats(16, 1, 0, 1, 0, 1)
-update_player_stats(16, 13, 2, 0, 0, 1)
-update_player_stats(16, 2, 1, 1, 0, 1)
-#update_player_stats(16, 2, 1, 0, 0, 1)
-#update_player_stats(14, 8, 0, 1, 0, 1)
+update_player_stats(17, 11, 0, 0, 1, 1)
 
 
 
