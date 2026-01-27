@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from typing import Tuple
 
@@ -22,7 +23,7 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
     # empty dataframes as fallback
     df_teams = pd.DataFrame(columns=["team_id", "club", "team", "season", "location", "coach"])
     df_rosters = pd.DataFrame(columns=["player_id", "team_id", "jersey_num", "name", "position"])
-    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play", "game_type"])
+    df_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "game_type"])
     df_players = pd.DataFrame(columns=["game_id", "player_id", "goals", "assists", "penalty_min", "active"])
     df_goalies = pd.DataFrame(columns=["game_id", "player_id", "shots_faced", "saves", "goals_allowed", "result", "active"])
 
@@ -51,8 +52,6 @@ def load_dfs_from_database(season: int, db_path: str = "data/HockeyStat.db") -> 
         # Load player and goalie stats: restrict to current rosters and season games only
         player_ids = df_rosters["player_id"].unique().tolist()
         game_ids = df_games["game_id"].unique().tolist()
-        if not player_ids or not game_ids:
-            return df_teams, df_rosters, df_games, df_players, df_goalies
         if player_ids and game_ids:
             p_placeholders = ",".join(["?"] * len(player_ids))
             g_placeholders = ",".join(["?"] * len(game_ids))
@@ -161,11 +160,11 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
         if 'leader_count' not in st.session_state:
             st.session_state.leader_count = 0
         if pos == "G":
-            df =df[df['shots_faced'] >= 10]  # minimum shots on goal to qualify
+            df =df[df['shots_faced'] >= 5]  # minimum shots on goal to qualify
             st.session_state.goalie_leader['save'] = df[df['save_pct'] == df['save_pct'].max()]["player_id"].values[0] if not df.empty else None  
             st.session_state.goalie_leader['wins'] = df[df['wins'] == df['wins'].max()]["player_id"].values[0] if not df.empty else None  
         else:
-            df= df[df['points'] >= df['active'].max()/2]  # minimum points scored to qualify
+            df= df[df['points'] >= df['active'].max()/5]  # minimum points scored to qualify
             st.session_state.leader_count = df.shape[0]
             st.session_state.leader["PPG"] = _top3(df, lambda d: d["points"] / d["active"])
             st.session_state.leader["GPG"] = _top3(df, lambda d: d["goals"] / d["active"])
@@ -272,7 +271,7 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
     df = stats_df.copy()
     df = df[_active_mask(df["active"])] if "active" in df.columns else df
     if df.empty:
-        pass
+        return
 
     if "shots_faced" in df.columns:
         shots = int(df.get("shots_faced", 0).sum())
@@ -298,16 +297,21 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         assists = int(df["assists"].sum())
         points = int(df.get("points", df["goals"] + df["assists"]).sum())
         pim = int(pd.to_numeric(df.get("penalty_min", 0), errors="coerce").fillna(0).sum())
+        last_two = 0.0
+        great_game = False
         if games > 3:
             last_two = df["points"][-2:].mean() - df["points"][:-2].mean()
-            if df["points"][-1:].mean() == 0:
+            if df["points"][-1:].mean() == 0:  # if last game was scoreless, cool down
                 last_two = min(0.0, last_two)
-            great_game = True if df["points"][-1:].mean() > df["points"].mean() + 1 else False
+            elif df["points"][-1:].mean() >= df["points"][:-2].mean():  # if last game was strong, heat up
+                last_two = max(0.0, last_two)
+            great_game = True if df["points"].iloc[-1] > df["points"][:-1].mean() + 1 else False
         hat_tricks = df[df["goals"] >= 3].shape[0]
         play_makers = df[df["assists"] >= 3].shape[0]
         assistperpoint = round(assists / points, 2) if points > 0 else None
         p_id = df["player_id"].iloc[0] if "player_id" in df.columns else "Player"
         #TODO guard against missing leader state or less than 3 leaders
+        leader_for = []
         if st.session_state.leader_count > 0:
             leader_for = [(item[0], "🥇") for item in st.session_state.leader.items() if item[1][0] == p_id]
         if st.session_state.leader_count > 1:
@@ -393,7 +397,9 @@ def plot_season_stats(df_players: pd.DataFrame,
     st.plotly_chart(fig)
 
 ### Admin Tab helper functions
-def check_admin_password(key="admin_password_input", expected="rip") -> bool:
+def check_admin_password(key="admin_password_input", expected=None) -> bool:
+    if expected is None:
+        expected = os.getenv("HOCKEY_ADMIN_PASSWORD", "rip")  # TODO: Change default for production
     st.text_input("Admin password", type="password", key=key)
     if st.session_state.get(key, "") != expected:
         st.warning("Input admin password.")
@@ -421,7 +427,11 @@ def write_games_to_db(edited_games_df: pd.DataFrame,
     def _validate_game_row(row: pd.Series, teams: dict) -> bool:
         try:
             pd.to_datetime(row["date"])
-            vld = 0 <= row["away_score"] < 100 and 0 <= row["home_score"] < 100 and row["away_team"] in teams.values() and row["home_team"] in teams.values()
+            team_values = set(teams.values())
+            vld = (0 <= row["away_score"] < 100 and 
+                   0 <= row["home_score"] < 100 and 
+                   row["away_team"] in team_values and 
+                   row["home_team"] in team_values)
             return vld
         except Exception as e:
             st.warning(f"Validation failed: {e}")
@@ -466,7 +476,7 @@ def write_games_to_db(edited_games_df: pd.DataFrame,
         for game_id, row in df.iterrows():
             if _validate_game_row(row, teams):
                 row["date"] = row["date"].strftime("%Y-%m-%d")
-                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score", "league_play"]
+                update_fields = ["date", "away_score", "away_team_id", "home_team_id", "home_score"]
                 values = [row[col] for col in update_fields]
                 set_clause = ", ".join([f"{col} = ?" for col in update_fields])
                 values.append(game_id)
@@ -627,7 +637,6 @@ if df_teams.empty or df_rosters.empty:
 
 else:
     team_map = df_teams["team"].to_dict()
-    player_map = df_rosters["name"].to_dict()
     team_options = sorted(df_teams["team"].tolist(), reverse = True)
     with col01:
         selected_team_name = st.selectbox("Selected Team", options=team_options, index=0, disabled=True)
@@ -654,6 +663,11 @@ else:
     
     selected_game_ids = df_select_games["game_id"].unique()
 
+### Calculate team_games early for use in multiple tabs
+team_games = pd.DataFrame()
+if not df_teams.empty and not df_rosters.empty and not df_select_games.empty:
+    team_games = summarize_team_games(df_select_games, st.session_state.team_id)
+
 ### --- Streamlit UI scaffold ---
 tabs = st.tabs(["Team", "Players", "Plots", "About", "Admin"])
 
@@ -661,11 +675,9 @@ with tabs[0]:
     if "team_name" in st.session_state:
         st.subheader(f"{st.session_state.team_name} Overview", divider="red")
 
-        if df_select_games.empty:
+        if team_games.empty:
             st.info("No games found for this season.")
-            team_games = pd.DataFrame()
         else:
-            team_games = summarize_team_games(df_select_games, st.session_state.team_id)
             st.markdown("---")
             st.badge("Recent Games", color="red")
             display_game_table(team_games.head(5), team_map)  
@@ -718,7 +730,9 @@ with tabs[1]:
                 plot_game_log(stats_df, df_select_games)
 
 with tabs[2]:
-    if df_players.empty or team_games.empty:
+    if not st.session_state.get("team_id"):
+        st.info("Please select a team first.")
+    elif df_players.empty or team_games.empty:
         st.info("No stats available for plotting.")
     else:
         stat = st.radio("Select Statistic", ["goals", "assists", "points"],
