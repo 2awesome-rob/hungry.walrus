@@ -151,6 +151,7 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             return []
         s = metric(df).replace([np.inf, -np.inf], np.nan).fillna(0)
         top = df.assign(_metric=s).sort_values("_metric", ascending=False)
+        top = top[top["_metric"] > 0]
         return top["player_id"].head(3).tolist()
     def _team_leaders(df: pd.DataFrame, pos: str):
         if 'leader' not in st.session_state:
@@ -164,15 +165,17 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             st.session_state.goalie_leader['save'] = df[df['save_pct'] == df['save_pct'].max()]["player_id"].values[0] if not df.empty else None  
             st.session_state.goalie_leader['wins'] = df[df['wins'] == df['wins'].max()]["player_id"].values[0] if not df.empty else None  
         else:
-            df= df[df['points'] >= df['active'].max()/5]  # minimum points scored to qualify
-            st.session_state.leader_count = df.shape[0]
+            st.session_state.leader["points"] = _top3(df, lambda d: d["points"])
+            st.session_state.leader["goals"] = _top3(df, lambda d: d["goals"])
+            st.session_state.leader["assists"] = _top3(df, lambda d: d["assists"])
+            df= df[df['points'] >= df['active'].max()/6]  # minimum points scored to qualify for per game leaders
+            #TODO is leader_count needed? or is there a better way to implement?
+            st.session_state.leader_count = df.shape[0] 
             st.session_state.leader["PPG"] = _top3(df, lambda d: d["points"] / d["active"])
             st.session_state.leader["GPG"] = _top3(df, lambda d: d["goals"] / d["active"])
             st.session_state.leader["APG"] = _top3(df, lambda d: d["assists"] / d["active"])
             st.session_state.leader["APP"] = _top3(df, lambda d: d["assists"] / d["points"])
-            st.session_state.leader["points"] = _top3(df, lambda d: d["points"])
-            st.session_state.leader["goals"] = _top3(df, lambda d: d["goals"])
-            st.session_state.leader["assists"] = _top3(df, lambda d: d["assists"])
+
             
     df = df_players.merge(df_games[["game_id"]], on="game_id")
     df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
