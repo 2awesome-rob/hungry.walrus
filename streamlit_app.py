@@ -158,8 +158,6 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             st.session_state.leader = {}
         if 'goalie_leader' not in st.session_state:
             st.session_state.goalie_leader = {}
-        if 'leader_count' not in st.session_state:
-            st.session_state.leader_count = 0
         if pos == "G":
             df =df[df['shots_faced'] >= 5]  # minimum shots on goal to qualify
             st.session_state.goalie_leader['save'] = df[df['save_pct'] == df['save_pct'].max()]["player_id"].values[0] if not df.empty else None  
@@ -168,9 +166,7 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             st.session_state.leader["points"] = _top3(df, lambda d: d["points"])
             st.session_state.leader["goals"] = _top3(df, lambda d: d["goals"])
             st.session_state.leader["assists"] = _top3(df, lambda d: d["assists"])
-            df= df[df['points'] >= df['active'].max()/6]  # minimum points scored to qualify for per game leaders
-            #TODO is leader_count needed? or is there a better way to implement?
-            st.session_state.leader_count = df.shape[0] 
+            df= df[df['active'] >= df['active'].max()/4]  # minimum games active to qualify
             st.session_state.leader["PPG"] = _top3(df, lambda d: d["points"] / d["active"])
             st.session_state.leader["GPG"] = _top3(df, lambda d: d["goals"] / d["active"])
             st.session_state.leader["APG"] = _top3(df, lambda d: d["assists"] / d["active"])
@@ -313,14 +309,15 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         play_makers = df[df["assists"] >= 3].shape[0]
         assistperpoint = round(assists / points, 2) if points > 0 else None
         p_id = df["player_id"].iloc[0] if "player_id" in df.columns else "Player"
-        #TODO guard against missing leader state or less than 3 leaders
+        # Safely assign leader badges based on actual leader list length
         leader_for = []
-        if st.session_state.leader_count > 0:
-            leader_for = [(item[0], "🥇") for item in st.session_state.leader.items() if item[1][0] == p_id]
-        if st.session_state.leader_count > 1:
-            leader_for.extend([(item[0], "🥈") for item in st.session_state.leader.items() if item[1][1] == p_id])
-        if st.session_state.leader_count > 2:
-            leader_for.extend([(item[0], "🥉") for item in st.session_state.leader.items() if item[1][2] == p_id])
+        badges = ["🥇", "🥈", "🥉"]
+        for stat_name, leaders_list in st.session_state.leader.items():
+            if isinstance(leaders_list, list):
+                for rank_idx, player_id in enumerate(leaders_list):
+                    if player_id == p_id and rank_idx < len(badges):
+                        leader_for.append((stat_name, badges[rank_idx]))
+                        break  # Player can only have one rank per stat
         stats = {"Games": games,
                  "Goals": (goals, _get_badge("goals", leader_for)),
                  "Assists": (assists, _get_badge("assists", leader_for)),
@@ -365,6 +362,33 @@ def plot_game_log(game_log_df: pd.DataFrame, df_games: pd.DataFrame):
         st.line_chart(data=df, x="date", y=["assists", "points"], x_label="", color=["#a54848", "#ff2b2b"], height=200)
 
 ### Plot Tab helper functions
+def plot_assist_point_ratio(df_players: pd.DataFrame, 
+                           df_games: pd.DataFrame,
+                           df_rosters: pd.DataFrame,
+                           team: int):
+    """Bar chart showing assist-to-point ratio by player"""
+    df = df_players.merge(df_games[["game_id"]], on="game_id")
+    df = df.merge(df_rosters[["player_id", "team_id", "name"]], on="player_id")
+    df = df[df['team_id'] == team]
+    
+    df_summary = df.groupby("name", as_index=False).agg({
+        "goals": "sum",
+        "assists": "sum",
+        "points": "sum"
+    })
+    df_summary = df_summary[df_summary["points"] > 0]
+    df_summary["assist_ratio"] = (df_summary["assists"] / df_summary["points"] * 100).round(1)
+    df_summary = df_summary.sort_values("assist_ratio", ascending=False)
+    
+    fig = px.bar(df_summary, x="name", y="assist_ratio", 
+                 title="Assist-to-Point Ratio by Player (%)",
+                 labels={"assist_ratio": "Assist %", "name": "Player"},
+                 color="assist_ratio",
+                 color_continuous_scale="blues",
+                 text="assist_ratio")
+    fig.update_traces(textposition="outside")
+    st.plotly_chart(fig)
+
 def plot_season_stats(df_players: pd.DataFrame, 
                       df_games: pd.DataFrame,
                       df_rosters: pd.DataFrame,
@@ -743,9 +767,10 @@ with tabs[2]:
                          horizontal=True)
         plot_season_stats(df_players, team_games, df_rosters, st.session_state.team_id, stat)
         st.markdown("---")
-   
-    ### Sharing is Caring
-    ### TODO: build bar chart of assists to point ratio by player
+        
+        st.badge("Assist-to-Point Ratio", color="blue")
+        plot_assist_point_ratio(df_players, team_games, df_rosters, st.session_state.team_id)
+        st.markdown("---")
 
 with tabs[3]:
     st.write("League Standing and Schedule:")
