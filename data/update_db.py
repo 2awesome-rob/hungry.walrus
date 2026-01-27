@@ -39,7 +39,7 @@ def add_team(team_id, club, season, team, location, coach):
 #add_team(11,'Tri-City Jr Americans','2025','Geris Jr Americans','Hapo Center',None)
 #add_team(12,'Tri-City Jr Americans','2025','Knighten Jr Americans','Hapo Center',None)
 #add_team(13,'Sno-King Jr Thunderbirds','2025','Cooper Jr Thunderbirds','Sno-King Renton',None)
-add_team(14,'Sno-King Jr Thunderbirds','2025','Trefethen Jr Thunderbirds','Sno-King Renton',None)
+#add_team(14,'Sno-King Jr Thunderbirds','2025','Trefethen Jr Thunderbirds','Sno-King Renton',None)
 
 def print_table_contents(table_name, game_id=None):
     conn = sqlite3.connect(db_path)
@@ -56,8 +56,8 @@ def print_table_contents(table_name, game_id=None):
 #print_table_contents("Games")
 #print_table_contents("Teams")
 #print_table_contents("Players")
-print_table_contents("GoalieGameStats", 17)
-print_table_contents("PlayerGameStats", 17)
+#print_table_contents("GoalieGameStats", 17)
+#print_table_contents("PlayerGameStats", 17)
 
 
 
@@ -91,7 +91,7 @@ def add_game(game_id, date, home_team_id, home_score, away_team_id, away_score, 
 #add_game(15, '2026-01-23', 11, 6, 1, 2, 0, 2)
 #add_game(16, '2026-01-24', 1, 6, 12, 3, 0, 2)
 #add_game(17, '2026-01-24', 13, 1, 1, 2, 0, 2)
-add_game(18, '2026-01-25', 14, 7, 1, 3, 0, 2)
+#add_game(18, '2026-01-25', 14, 7, 1, 3, 0, 2)
 
 def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed, active, result):
     conn = sqlite3.connect(db_path)
@@ -139,12 +139,12 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 #update_goalie_stats(17, 9, 28, 27, 1, 1, "W")
 #update_player_stats(17, 9, 0, 0, 0, 0)
 #update_goalie_stats(17, 4, 0, 0, 0, 0, None)
-update_goalie_stats(18, 9, 38, 31, 7, 1, "L")
-update_player_stats(18, 9, 0, 0, 0, 0)
-update_goalie_stats(18, 4, 0, 0, 0, 0, None)
+#update_goalie_stats(18, 9, 38, 31, 7, 1, "L")
+#update_player_stats(18, 9, 0, 0, 0, 0)
+#update_goalie_stats(18, 4, 0, 0, 0, 0, None)
 
 
-update_player_stats(18, 5, 3, 0, 0, 1)
+#update_player_stats(18, 5, 3, 0, 0, 1)
 
 #update_player_stats(17, 5, 1, 0, 0, 1)
 #update_player_stats(17, 1, 0, 0, 0, 1)
@@ -237,4 +237,5 @@ def update_game_type(game_id, game_type):
     
     conn.commit()
     conn.close()
+
 #update_game_type(14,2)

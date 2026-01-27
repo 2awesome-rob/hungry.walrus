@@ -641,22 +641,17 @@ else:
     with col02:
         l_p = st.pills("League Play", ["League", "Tournament", "Scrimage"], selection_mode="multi", default=["League"])
     st.session_state.league_play = l_p
+    
+    # Map game type labels to game_type values
+    game_type_map = {"League": 1, "Tournament": 2, "Scrimage": 0}
+    
     if l_p == []:
         df_select_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
-    elif l_p == ["League"]:
-        df_select_games = df_games[df_games['game_type']==1]
-    elif l_p == ["League", "Scrimage"]:
-        df_select_games = df_games[df_games['game_type'].isin([0,1])]
-    elif l_p == ["League", "Tournament"]:
-        df_select_games = df_games[df_games['game_type'].isin([1,2])]
-    elif l_p == ["Scrimage"]:
-        df_select_games = df_games[df_games['game_type']==0]
-    elif l_p == ["Scrimage", "Tournament"]:    
-        df_select_games = df_games[df_games['game_type'].isin([0,2])]
-    elif l_p == ["Tournament"]:
-        df_select_games = df_games[df_games['game_type']==2]
     else:
-        df_select_games = df_games
+        # Map selected labels to game type values, order-independent
+        selected_game_types = [game_type_map[label] for label in l_p]
+        df_select_games = df_games[df_games['game_type'].isin(selected_game_types)]
+    
     selected_game_ids = df_select_games["game_id"].unique()
 
 ### --- Streamlit UI scaffold ---
