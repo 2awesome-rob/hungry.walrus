@@ -92,6 +92,8 @@ def add_game(game_id, date, home_team_id, home_score, away_team_id, away_score, 
 #add_game(16, '2026-01-24', 1, 6, 12, 3, 0, 2)
 #add_game(17, '2026-01-24', 13, 1, 1, 2, 0, 2)
 #add_game(18, '2026-01-25', 14, 7, 1, 3, 0, 2)
+#add_game(19, '2026-01-31', 1, 8, 8, 7, 0, 1)
+
 
 def update_goalie_stats(game_id, player_id, shots_faced, saves, goals_allowed, active, result):
     conn = sqlite3.connect(db_path)
@@ -136,9 +138,9 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 
 
-#update_goalie_stats(17, 9, 28, 27, 1, 1, "W")
-#update_player_stats(17, 9, 0, 0, 0, 0)
-#update_goalie_stats(17, 4, 0, 0, 0, 0, None)
+#update_goalie_stats(19, 4, 29, 22, 7, 1, "W")
+#update_player_stats(19, 4, 0, 0, 0, 0)
+#update_goalie_stats(19, 9, 0, 0, 0, 0, None)
 #update_goalie_stats(18, 9, 38, 31, 7, 1, "L")
 #update_player_stats(18, 9, 0, 0, 0, 0)
 #update_goalie_stats(18, 4, 0, 0, 0, 0, None)
@@ -146,10 +148,11 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 #update_player_stats(18, 5, 3, 0, 0, 1)
 
-#update_player_stats(17, 5, 1, 0, 0, 1)
-#update_player_stats(17, 1, 0, 0, 0, 1)
-#update_player_stats(17, 7, 1, 0, 0, 1)
-#update_player_stats(17, 6, 0, 0, 1, 1)
+#update_player_stats(19, 5, 2, 1, 0, 1)
+#update_player_stats(19, 9, 3, 1, 0, 1)
+#update_player_stats(19, 2, 2, 0, 0, 1)
+#update_player_stats(19, 13, 1, 1, 0, 1)
+#update_player_stats(19, 3, 0, 0, 0, 0)
 
 #update_player_stats(17, 11, 0, 0, 1, 1)
 

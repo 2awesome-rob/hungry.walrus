@@ -166,7 +166,7 @@ def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame,
             st.session_state.leader["points"] = _top3(df, lambda d: d["points"])
             st.session_state.leader["goals"] = _top3(df, lambda d: d["goals"])
             st.session_state.leader["assists"] = _top3(df, lambda d: d["assists"])
-            df= df[df['active'] >= df['active'].max()/4]  # minimum games active to qualify
+            df= df[df['active'] >= df['active'].max()/4]  # minimum 1/4 games active to qualify
             st.session_state.leader["PPG"] = _top3(df, lambda d: d["points"] / d["active"])
             st.session_state.leader["GPG"] = _top3(df, lambda d: d["goals"] / d["active"])
             st.session_state.leader["APG"] = _top3(df, lambda d: d["assists"] / d["active"])
