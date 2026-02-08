@@ -130,7 +130,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
     conn.close()
 
 
-#describe_db_tables()
+describe_db_tables()
 #add_team(14,'Sno-King Jr Thunderbirds','2025','Trefethen Jr Thunderbirds','Sno-King Renton',None)
 
 #print_table_contents("Games")
@@ -141,7 +141,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 #add_game(19, '2026-01-31', 1, 8, 8, 7, 0, 1)
 #add_game(20, '2026-02-01', 5, 0, 1, 13, 0, 1)
-
+#add_game(21, '2026-02-07', 2, 1, 1, 5, 1, 1)
 
 #update_goalie_stats(19, 4, 29, 22, 7, 1, "W")
 #update_player_stats(19, 4, 0, 0, 0, 0)
@@ -149,19 +149,20 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 #update_goalie_stats(20, 9, 17, 17, 0, 1, "W")
 #update_player_active(20, 9, False)
 #update_goalie_stats(20, 4, 0, 0, 0, 0, None)
+#update_goalie_stats(21, 9, 28, 27, 1, 1, "W")
+#update_player_active(21, 9, False)
+#update_goalie_stats(21, 4, 0, 0, 0, 0, None)
 
-#update_player_stats(20, 5, 4, 2, 0, 1)
-#update_player_stats(20, 1, 1, 2, 0, 1)
-update_player_stats(20, 13, 3, 0, 0, 1)
-#update_player_stats(20, 11, 0, 1, 0, 1)
-#update_player_stats(20, 7, 3, 0, 0, 1)
-#update_player_stats(20, 8, 0, 2, 0, 1)
-update_player_stats(20, 2, 0, 1, 0, 1)
-#update_player_stats(20, 10, 1, 0, 0, 1)
-#update_player_stats(20, 4, 1, 0, 0, 1)
 
-#update_player_active(20, 3, False)
-#update_player_active(20, 12, False)
+#update_player_stats(21, 5, 2, 0, 0, 1)
+#update_player_stats(21, 2, 1, 1, 0, 1)
+#update_player_stats(21, 12, 0, 1, 0, 1)
+#update_player_stats(21, 4, 1, 0, 0, 1)
+#update_player_stats(21, 7, 1, 0, 0, 1)
+#update_player_stats(21, 13, 0, 1, 0, 1)
+
+#update_player_active(21, 3, False)
+#update_player_active(21, 8, False)
 
 
 
