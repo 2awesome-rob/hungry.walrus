@@ -151,7 +151,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 #print_table_contents("Games")
 #print_table_contents("Teams")
-#print_table_contents("Players")
+print_table_contents("Players")
 #print_table_contents("GoalieGameStats", 22)
 #print_table_contents("PlayerGameStats", 22)
 
@@ -189,7 +189,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 
 #update_player_stats(22, 5, 1, 0, 0, 1)
 #update_player_stats(22, 9, 1, 0, 0, 1)
-#update_player_stats(22, 11, 0, 0, 2, 1)
+#update_player_stats(22, 3, 0, 0, 2, 1)
 
 
 
