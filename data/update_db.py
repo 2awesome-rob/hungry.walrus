@@ -51,6 +51,19 @@ def add_team(team_id, club, season, team, location, coach):
     conn.commit()
     conn.close()
 
+def add_player(team_id, jersey_num, name, position):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+                   INSERT INTO Players (team_id, jersey_num, name, position)
+                   VALUES (?, ?, ?, ?)
+                   """,(team_id, jersey_num, name, position))
+
+    print(f"Added player {name} with ID {jersey_num}")
+    conn.commit()
+    conn.close()
+
 def print_table_contents(table_name, game_id=None):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -130,14 +143,17 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
     conn.close()
 
 
-describe_db_tables()
+#describe_db_tables()
 #add_team(14,'Sno-King Jr Thunderbirds','2025','Trefethen Jr Thunderbirds','Sno-King Renton',None)
+
+#add_player(1, 42, 'Charlie', 'D')
+#add_player(1, 0, 'Maddie Bro', 'D')
 
 #print_table_contents("Games")
 #print_table_contents("Teams")
 #print_table_contents("Players")
-#print_table_contents("GoalieGameStats", 20)
-#print_table_contents("PlayerGameStats", 20)
+#print_table_contents("GoalieGameStats", 22)
+#print_table_contents("PlayerGameStats", 22)
 
 #add_game(19, '2026-01-31', 1, 8, 8, 7, 0, 1)
 #add_game(20, '2026-02-01', 5, 0, 1, 13, 0, 1)
@@ -161,14 +177,19 @@ describe_db_tables()
 #update_player_stats(21, 7, 1, 0, 0, 1)
 #update_player_stats(21, 13, 0, 1, 0, 1)
 
-#update_player_active(21, 3, False)
-#update_player_active(21, 8, False)
+#add_game(22, '2026-02-10', 9, 10, 1, 2, 0, 0)
 
+#update_goalie_stats(22, 4, 23, 13, 10, 1, "L")
+#update_player_active(22, 4, False)
+#update_goalie_stats(22, 9, 0, 0, 0, 0, None)
 
+#update_player_active(22, 1, False)
+#update_player_active(22, 2, False)
+#update_player_active(22, 8, False)
 
-
-
-
+#update_player_stats(22, 5, 1, 0, 0, 1)
+#update_player_stats(22, 9, 1, 0, 0, 1)
+#update_player_stats(22, 11, 0, 0, 2, 1)
 
 
 
