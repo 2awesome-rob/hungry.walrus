@@ -152,7 +152,7 @@ def update_player_stats(game_id, player_id, goals, assists, penalty_min, active)
 #print_table_contents("Games")
 #print_table_contents("Teams")
 print_table_contents("Players")
-#print_table_contents("GoalieGameStats", 22)
+print_table_contents("GoalieGameStats", 24)
 #print_table_contents("PlayerGameStats", 22)
 
 #add_game(19, '2026-01-31', 1, 8, 8, 7, 0, 1)
@@ -191,7 +191,7 @@ print_table_contents("Players")
 #update_player_stats(22, 9, 1, 0, 0, 1)
 #update_player_stats(22, 3, 0, 0, 2, 1)
 
-
+#update_goalie_stats(24, 9, 27, 25, 2, 1, "W")
 
 
 def add_column(tbl, col):
