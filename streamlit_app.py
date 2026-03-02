@@ -761,6 +761,7 @@ with tabs[1]:
     else:
         player_options = sorted(team_players["name"].tolist())
         player_options = [p for p in player_options if "Guest" not in p]
+        player_options.reverse()
         selected_player_name = st.selectbox("Select player", options=player_options)
 
         selected_player_id = int(team_players[team_players["name"] == selected_player_name].iloc[0]["player_id"])
