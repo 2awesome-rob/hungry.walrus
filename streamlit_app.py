@@ -147,12 +147,50 @@ def display_game_table(df_games: pd.DataFrame, team_map: dict):
 def display_season_total_stats(df_players: pd.DataFrame, df_games: pd.DataFrame, df_rosters: pd.DataFrame, team: int) -> pd.DataFrame:
     """ displays a df of season totals for each player on the team """
     def _top3(df, metric):
+        """
+        Returns list of (player_id, medal_rank) tuples with tie-aware ranking.
+        Medals: 0=gold 🥇, 1=silver 🥈, 2=bronze 🥉
+        - All tied players get same medal
+        - Next tier only advances if there are non-tied values
+        - Maximum 6 total medals per stat
+        - Excludes zero/empty stats
+        """
         if df.empty:
             return []
         s = metric(df).replace([np.inf, -np.inf], np.nan).fillna(0)
-        top = df.assign(_metric=s).sort_values("_metric", ascending=False)
-        top = top[top["_metric"] > 0]
-        return top["player_id"].head(3).tolist()
+        df_with_metric = df.assign(_metric=s)
+        df_with_metric = df_with_metric[df_with_metric["_metric"] > 0]  # Filter non-zero only
+        
+        if df_with_metric.empty:
+            return []
+        
+        result = []
+        medal_rank = 0
+        medals_awarded = 0
+        max_medals = 6
+        max_medal_tiers = 3  # gold, silver, bronze
+        
+        # Get all unique values sorted descending
+        unique_values = sorted(df_with_metric["_metric"].unique(), reverse=True)
+        
+        for value in unique_values:
+            if medals_awarded >= max_medals or medal_rank >= max_medal_tiers:
+                break
+            
+            # Get all players tied at this value
+            players_at_value = df_with_metric[df_with_metric["_metric"] == value]["player_id"].tolist()
+            
+            # Award medals, respecting max_medals limit
+            for player_id in players_at_value:
+                if medals_awarded >= max_medals:
+                    break
+                result.append((player_id, medal_rank))
+                medals_awarded += 1
+            
+            # Advance to next medal tier
+            medal_rank += 1
+        
+        return result
     def _team_leaders(df: pd.DataFrame, pos: str):
         if 'leader' not in st.session_state:
             st.session_state.leader = {}
@@ -309,14 +347,14 @@ def display_summary_stats(stats_df: pd.DataFrame, full_df: pd.DataFrame):
         play_makers = df[df["assists"] >= 3].shape[0]
         assistperpoint = round(assists / points, 2) if points > 0 else None
         p_id = df["player_id"].iloc[0] if "player_id" in df.columns else "Player"
-        # Safely assign leader badges based on actual leader list length
+        # Assign leader badges using medal rank from _top3
         leader_for = []
         badges = ["🥇", "🥈", "🥉"]
         for stat_name, leaders_list in st.session_state.leader.items():
             if isinstance(leaders_list, list):
-                for rank_idx, player_id in enumerate(leaders_list):
-                    if player_id == p_id and rank_idx < len(badges):
-                        leader_for.append((stat_name, badges[rank_idx]))
+                for player_id, medal_rank in leaders_list:
+                    if player_id == p_id and medal_rank < len(badges):
+                        leader_for.append((stat_name, badges[medal_rank]))
                         break  # Player can only have one rank per stat
         stats = {"Games": games,
                  "Goals": (goals, _get_badge("goals", leader_for)),
@@ -675,11 +713,11 @@ else:
     st.session_state.team_id = selected_team_id
 
     with col02:
-        l_p = st.pills("League Play", ["League", "Tournament", "Scrimage"], selection_mode="multi", default=["League"])
+        l_p = st.pills("League Play", ["League", "PostSeason", "Tournament", "Scrimage"], selection_mode="multi", default=["League", "Tournament", "PostSeason"])
     st.session_state.league_play = l_p
     
     # Map game type labels to game_type values
-    game_type_map = {"League": 1, "Tournament": 2, "Scrimage": 0}
+    game_type_map = {"League": 1, "Tournament": 2, "Scrimage": 0, "PostSeason": 3}
     
     if l_p == []:
         df_select_games = pd.DataFrame(columns=["game_id", "date", "home_team_id", "home_score", "away_team_id", "away_score", "overtime", "shootout", "league_play"])
@@ -707,7 +745,7 @@ with tabs[0]:
         else:
             st.markdown("---")
             st.badge("Recent Games", color="red")
-            display_game_table(team_games.head(5), team_map)  
+            display_game_table(team_games.head(10), team_map)  
             
             st.markdown("---")
             st.badge("Goalie Stats", color="red")
