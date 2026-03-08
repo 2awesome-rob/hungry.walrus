@@ -744,15 +744,15 @@ with tabs[0]:
             st.info("No games found for this season.")
         else:
             st.markdown("---")
-            st.badge("Recent Games", color="red")
-            display_game_table(team_games.head(10), team_map)  
-            
-            st.markdown("---")
             st.badge("Goalie Stats", color="red")
             display_season_total_stats(df_goalies, team_games, df_rosters, st.session_state.team_id)
                 
             st.badge("Skater Stats", color="red")
             display_season_total_stats(df_players, team_games, df_rosters, st.session_state.team_id)
+
+            st.markdown("---")
+            st.badge("Games Log", color="red")
+            display_game_table(team_games.head(20), team_map)  
 
 with tabs[1]:
     team_players = df_rosters[df_rosters["team_id"] == st.session_state.team_id]
