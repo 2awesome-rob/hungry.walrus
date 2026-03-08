@@ -193,22 +193,9 @@ print_table_contents("GoalieGameStats", 24)
 
 #update_goalie_stats(24, 9, 27, 25, 2, 1, "W")
 
-add_game(25, '2026-03-06', 1, 9, ?, 4, 1, 4)
+#add_game(25, '2026-03-06', 1, 9, ?, 4, 1, 4)
 
-update_player_stats(25, 5, 4, 0, 0, 1)
-update_player_stats(25, 7, 1, 0, 0, 1)
-update_player_stats(25, 73, 0, 1, 1, 1)
-update_player_stats(25, 49, 3, 1, 0, 1)
-update_player_stats(25, 47, 0, 1, 0, 1)
-update_player_stats(25, 29, 1, 0, 0, 1)
 
-update_player_active(25, 10, False)
-update_player_active(25, 2, False)
-update_player_active(25, 4, False)
-
-update_goalie_stats(25, 9, 0, 0, 0, 0, None)
-update_goalie_stats(25, 4, 19, 15, 4, 1, "W")
-update_goalie_stats(25, 4, 0, 0, 0, 0, None)
 
 def add_column(tbl, col):
     conn = sqlite3.connect(db_path)
@@ -250,4 +237,4 @@ def update_game_type(game_id, game_type):
     
     conn.commit()
     conn.close()
-#update_game_type(14,2)
+update_game_type(25,3)
