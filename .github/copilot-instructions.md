@@ -1,4 +1,4 @@
-# AI Agent Instructions for VB_scorekeeper
+# AI Agent Instructions for Hockey Stat
 
   ## Project Overview
   This is a web application for viewing hockey player statistics.

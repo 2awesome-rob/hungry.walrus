@@ -1,0 +1,322 @@
+------------------------------------------------------------
+-- GAME TYPE DICTIONARY
+------------------------------------------------------------
+CREATE TABLE dict_gametype (
+    type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_type TEXT
+);
+
+INSERT INTO dict_gametype (game_type)
+VALUES ("Regular Season"),
+       ("Post Season"),
+       ("Scrimmage"),
+       ("Tournament");
+
+------------------------------------------------------------
+-- RULESETS
+------------------------------------------------------------
+CREATE TABLE dict_rules (
+    r_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_body TEXT,
+    division TEXT,
+    association TEXT,
+    clock_1 INTEGER,
+    clock_2 INTEGER,
+    clock_3 INTEGER,
+    stop_1 BOOLEAN,
+    stop_2 BOOLEAN,
+    stop_3 BOOLEAN,
+    ot_length_sec INTEGER,
+    shootout BOOLEAN
+);
+
+INSERT INTO dict_rules (
+    rule_body, association, division,
+    clock_1, clock_2, clock_3,
+    stop_1, stop_2, stop_3,
+    ot_length_sec, shootout
+)
+VALUES ("USA Hockey","PNAHA League","Youth 12U",900,900,900,TRUE,TRUE,TRUE,0,FALSE),
+       ("USA Hockey","PNAHA Tournament","Youth 12U",900,900,900,TRUE,TRUE,TRUE,300,TRUE),
+       ("Hockey Canada","Tournament","Youth U13",900,900,900,TRUE,TRUE,TRUE,300,TRUE),
+       ("US Pond Hockey","Tournament","Youth 12U",600,600,600,FALSE,FALSE,FALSE,0,FALSE);
+
+------------------------------------------------------------
+-- POSITION DICTIONARY
+------------------------------------------------------------
+CREATE TABLE dict_position (
+    pos_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position TEXT,
+    position_abbv TEXT
+);
+
+INSERT INTO dict_position (position, position_abbv)
+VALUES ("Goalie","G"),
+       ("Defense","D"),
+       ("Forward","F"),
+       ("Center","C"),
+       ("Winger","W"),
+       ("Left Winger","LW"),
+       ("Right Winger","RW");
+
+------------------------------------------------------------
+-- PERIOD DICTIONARY
+------------------------------------------------------------
+CREATE TABLE dict_period (
+    p_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period TEXT
+);
+
+INSERT INTO dict_period (period)
+VALUES ("First"),
+       ("Second"),
+       ("Third"),
+       ("Over Time"),
+       ("Shootout");
+
+------------------------------------------------------------
+-- FACEOFF REASONS
+------------------------------------------------------------
+CREATE TABLE dict_faceoff (
+    fo_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fo_reason TEXT
+);
+
+INSERT INTO dict_faceoff (fo_reason)
+VALUES ("Period"),
+       ("Offsides"),
+       ("Icing"),
+       ("Penalty"),
+       ("Frozen Puck"),
+       ("Out of Play");
+
+------------------------------------------------------------
+-- PENALTY DICTIONARIES
+------------------------------------------------------------
+CREATE TABLE dict_penalty (
+    p_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    penalty TEXT
+);
+
+INSERT INTO dict_penalty (penalty)
+VALUES ("Tripping"),
+       ("Hooking"),
+       ("Slashing"),
+       ("High Sticking"),
+       ("Roughing"),
+       ("Boarding");
+
+CREATE TABLE dict_penalty_type (
+    p_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    penalty_type TEXT
+);
+
+INSERT INTO dict_penalty_type (penalty_type)
+VALUES ("Minor"),
+       ("Double Minor"),
+       ("Major"),
+       ("Game Misconduct"),
+       ("Match Misconduct");
+
+------------------------------------------------------------
+-- SHOT RESULT DICTIONARY
+------------------------------------------------------------
+CREATE TABLE dict_shotresult (
+    s_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shotresult TEXT
+);
+
+INSERT INTO dict_shotresult (shotresult)
+VALUES ("GOAL"),
+       ("MISS"),
+       ("BLOCKED"),
+       ("SHOT_ON_GOAL");
+
+------------------------------------------------------------
+-- TEAM STATIC INFO
+------------------------------------------------------------
+CREATE TABLE Teams_Static (
+    team_static_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club TEXT NOT NULL,
+    team TEXT NOT NULL,
+    age TEXT,
+    home_ice TEXT
+);
+
+------------------------------------------------------------
+-- TEAM SEASON INFO
+------------------------------------------------------------
+CREATE TABLE Teams (
+    team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_static_id INTEGER,
+    season YEAR,
+    coach TEXT,
+    league TEXT,
+    division TEXT,
+    FOREIGN KEY (team_static_id) REFERENCES Teams_Static(team_static_id)
+);
+
+------------------------------------------------------------
+-- PLAYER STATIC INFO
+------------------------------------------------------------
+CREATE TABLE Players_Static (
+    player_static_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_last_name TEXT NOT NULL,
+    player_first_name TEXT NOT NULL,
+    player_go_by TEXT,
+    player_parents TEXT,
+    birth_year YEAR,
+    height_in NUMBER,
+    weight_lbs NUMBER,
+    shoots TEXT CHECK (shoots IN ('L','R','-')),
+    catches TEXT CHECK (catches IN ('L','R','-'))
+);
+
+------------------------------------------------------------
+-- PLAYER SEASON INFO
+------------------------------------------------------------
+CREATE TABLE Players (
+    player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_static_id INTEGER,
+    team_id INTEGER,
+    season YEAR,
+    jersey_num INTEGER,
+    position INTEGER,
+    line INTEGER,
+    FOREIGN KEY (player_static_id) REFERENCES Players_Static(player_static_id),
+    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (position) REFERENCES dict_position(pos_id)
+);
+
+------------------------------------------------------------
+-- GAMES
+------------------------------------------------------------
+CREATE TABLE Games (
+    game_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rink_id INTEGER,
+    season YEAR,
+    game_date DATE,
+    puck_drop TIME DEFAULT "12:00:00.00",
+    home_team_id INTEGER,
+    away_team_id INTEGER,
+    game_type INTEGER DEFAULT 1,
+    rules INTEGER DEFAULT 1,
+    home_score INTEGER,
+    away_score INTEGER,
+    home_sog INTEGER,
+    away_sog INTEGER,
+    overtime BOOLEAN DEFAULT FALSE,
+    shootout BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (home_team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (away_team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (game_type) REFERENCES dict_gametype(type_id),
+    FOREIGN KEY (rules) REFERENCES dict_rules(r_id)
+);
+
+------------------------------------------------------------
+-- SHIFTS
+------------------------------------------------------------
+CREATE TABLE Shifts (
+    shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game INTEGER NOT NULL,
+    period INTEGER,
+    start_clock_time_sec INTEGER,
+    end_clock_time_sec INTEGER,
+    empty_net_away BOOLEAN DEFAULT FALSE,
+    empty_net_home BOOLEAN DEFAULT FALSE,
+    home_skaters INTEGER,
+    away_skaters INTEGER,
+    FOREIGN KEY (game) REFERENCES Games(game_id),
+    FOREIGN KEY (period) REFERENCES dict_period(p_id)
+);
+
+------------------------------------------------------------
+-- SKATERS ON ICE
+------------------------------------------------------------
+CREATE TABLE Skaters (
+    line_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_id INTEGER NOT NULL,
+    player_id INTEGER,
+    position INTEGER,
+    FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
+    FOREIGN KEY (player_id) REFERENCES Players(player_id),
+    FOREIGN KEY (position) REFERENCES dict_position(pos_id)
+);
+
+------------------------------------------------------------
+-- SHOTS
+------------------------------------------------------------
+CREATE TABLE Shots (
+    shot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_id INTEGER NOT NULL,
+    period_id INTEGER,
+    clock_time_sec INTEGER,
+    team_id INTEGER,
+    shooter_id INTEGER NOT NULL,
+    shot_result INTEGER,
+    x_location_ft REAL,
+    y_location_ft REAL,
+    is_rebound BOOLEAN,
+    is_rush BOOLEAN,
+    is_one_timer BOOLEAN,
+    is_screened BOOLEAN,
+    is_deflection BOOLEAN,
+    first_assist_id INTEGER,
+    second_assist_id INTEGER,
+    FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
+    FOREIGN KEY (period_id) REFERENCES dict_period(p_id),
+    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (shooter_id) REFERENCES Players(player_id),
+    FOREIGN KEY (first_assist_id) REFERENCES Players(player_id),
+    FOREIGN KEY (second_assist_id) REFERENCES Players(player_id),
+    FOREIGN KEY (shot_result) REFERENCES dict_shotresult(s_id)
+);
+
+------------------------------------------------------------
+-- PENALTIES
+------------------------------------------------------------
+CREATE TABLE Penalties (
+    penalty_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_id INTEGER NOT NULL,
+    period_id INTEGER,
+    clock_time_sec INTEGER,
+    team_id INTEGER,
+    player_id INTEGER NOT NULL,
+    drawn_by_id INTEGER,
+    served_by_id INTEGER,
+    penalty INTEGER,
+    penalty_type INTEGER,
+    minutes INTEGER,
+    is_coincidental BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
+    FOREIGN KEY (period_id) REFERENCES dict_period(p_id),
+    FOREIGN KEY (team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (player_id) REFERENCES Players(player_id),
+    FOREIGN KEY (drawn_by_id) REFERENCES Players(player_id),
+    FOREIGN KEY (served_by_id) REFERENCES Players(player_id),
+    FOREIGN KEY (penalty) REFERENCES dict_penalty(p_id),
+    FOREIGN KEY (penalty_type) REFERENCES dict_penalty_type(p_id)
+);
+
+------------------------------------------------------------
+-- FACEOFFS
+------------------------------------------------------------
+CREATE TABLE Faceoffs (
+    drop_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_id INTEGER NOT NULL,
+    face_off_reason INTEGER NOT NULL,
+    clock_time_sec INTEGER,
+    home_player_id INTEGER,
+    away_player_id INTEGER,
+    winning_player_id INTEGER,
+    winning_team_id INTEGER,
+    losing_team_id INTEGER,
+    home_zone TEXT CHECK (home_zone IN ('OZ','NZ','DZ')),
+    FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
+    FOREIGN KEY (face_off_reason) REFERENCES dict_faceoff(fo_id),
+    FOREIGN KEY (home_player_id) REFERENCES Players(player_id),
+    FOREIGN KEY (away_player_id) REFERENCES Players(player_id),
+    FOREIGN KEY (winning_player_id) REFERENCES Players(player_id),
+    FOREIGN KEY (winning_team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (losing_team_id) REFERENCES Teams(team_id)
+);
